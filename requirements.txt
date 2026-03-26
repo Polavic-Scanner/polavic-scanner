@@ -1,6 +1,5 @@
 streamlit 
 requests
-whois
-openai
-reportlab
 matplotlib
+reportlab
+openai
