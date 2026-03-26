@@ -7,46 +7,58 @@ import re
 import ssl
 import whois
 
-# PAGE CONFIG
 st.set_page_config(page_title="POLAVIC", page_icon="🛡️", layout="centered")
 
-# 🎨 FULL CSS (ANIMATIONS + LOGO)
+# 🎨 FULL 3D THEME CSS
 st.markdown("""
 <style>
-.stApp { background-color: #000000; color: #ffffff; }
+.stApp {
+    background: radial-gradient(circle at 20% 20%, #0f0f0f, #000000);
+    color: white;
+}
 
+/* LOGO */
 .logo-text {
     text-align:center;
-    font-size:42px;
-    letter-spacing:10px;
+    font-size:48px;
+    letter-spacing:12px;
     font-weight:bold;
-    animation: glow 2s infinite alternate;
+    text-shadow:0 0 20px red;
+    animation: float 3s ease-in-out infinite;
 }
-@keyframes glow {
-    from { text-shadow: 0 0 10px red; }
-    to { text-shadow: 0 0 25px red, 0 0 50px red; }
+@keyframes float {
+    0% {transform: translateY(0);}
+    50% {transform: translateY(-10px);}
+    100% {transform: translateY(0);}
 }
 
+/* SCAN LINE */
 .scan-line {
-    width: 100%;
-    height: 2px;
+    height:2px;
     background: linear-gradient(90deg, transparent, red, transparent);
-    animation: scan 1.5s linear infinite;
-    margin-bottom: 10px;
+    animation: scan 2s infinite;
 }
 @keyframes scan {
     0% {transform: translateX(-100%);}
     100% {transform: translateX(100%);}
 }
 
+/* 3D BOX */
 .box {
-    background:#0a0a0a;
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(12px);
     padding:20px;
-    border-left:4px solid red;
-    border-radius:8px;
+    border-radius:15px;
+    border:1px solid rgba(255,0,0,0.3);
+    box-shadow:0 10px 30px rgba(255,0,0,0.3);
     margin-top:20px;
+    transition:0.3s;
+}
+.box:hover {
+    transform: scale(1.02);
 }
 
+/* FADE */
 .fade-in {
     animation: fadeIn 1s ease-in;
 }
@@ -54,21 +66,35 @@ st.markdown("""
     from {opacity:0; transform:translateY(20px);}
     to {opacity:1; transform:translateY(0);}
 }
+
+/* BUTTON */
+.stButton>button {
+    background: linear-gradient(135deg, red, darkred);
+    border-radius:10px;
+    height:45px;
+    font-weight:bold;
+    color:white;
+}
+
+/* INPUT */
+.stTextInput input {
+    background: rgba(255,255,255,0.05);
+    border:1px solid rgba(255,0,0,0.3);
+    border-radius:10px;
+    color:white;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# 🔥 LOGO (TEXT STYLE)
+# LOGO
 st.markdown('<div class="logo-text">🛡️ POLAVIC</div>', unsafe_allow_html=True)
-
-# SCAN LINE
 st.markdown('<div class="scan-line"></div>', unsafe_allow_html=True)
 
-# DOMAIN VALIDATION
+# VALIDATION
 def is_valid_domain(domain):
-    pattern = r"^(?!:\/\/)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$"
-    return re.match(pattern, domain)
+    return re.match(r"^(?!:\/\/)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$", domain)
 
-# SSL CHECK
+# SSL
 def check_ssl(domain):
     try:
         ctx = ssl.create_default_context()
@@ -79,16 +105,16 @@ def check_ssl(domain):
     except:
         return "Not Secure ❌"
 
-# PORT SCAN
+# PORTS
 def scan_ports(domain):
-    ports = [21, 22, 80, 443, 8080]
+    ports = [21,22,80,443,8080]
     open_ports = []
-    for port in ports:
+    for p in ports:
         try:
             s = socket.socket()
             s.settimeout(1)
-            s.connect((domain, port))
-            open_ports.append(port)
+            s.connect((domain,p))
+            open_ports.append(p)
             s.close()
         except:
             pass
@@ -97,19 +123,18 @@ def scan_ports(domain):
 # WHOIS
 def get_whois(domain):
     try:
-        w = whois.whois(domain)
-        return w.org if w.org else "Hidden"
+        return whois.whois(domain).org or "Hidden"
     except:
         return "Unavailable"
 
-# SUBDOMAIN SCAN
+# SUBDOMAIN
 def subdomain_scan(domain):
-    common = ["www", "mail", "ftp", "test", "dev"]
+    subs = ["www","mail","ftp","dev","test"]
     found = []
-    for sub in common:
+    for s in subs:
         try:
-            socket.gethostbyname(f"{sub}.{domain}")
-            found.append(f"{sub}.{domain}")
+            socket.gethostbyname(f"{s}.{domain}")
+            found.append(f"{s}.{domain}")
         except:
             pass
     return found if found else ["None"]
@@ -124,34 +149,31 @@ if submit:
         st.error("❌ Invalid domain")
     else:
         progress = st.progress(0)
-
         for i in range(100):
             time.sleep(0.01)
-            progress.progress(i + 1)
+            progress.progress(i+1)
 
         try:
             start = time.time()
 
             ip = socket.gethostbyname(url)
             api = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
-            response = requests.get(f"http://{url}", timeout=5)
+            res = requests.get(f"http://{url}", timeout=5)
 
-            load_time = round((time.time() - start) * 1000, 2)
+            load = round((time.time()-start)*1000,2)
 
             ssl_status = check_ssl(url)
             ports = scan_ports(url)
             owner = get_whois(url)
             subs = subdomain_scan(url)
 
-            st.success("✅ FULL SCAN COMPLETE")
+            st.success("✅ SCAN COMPLETE")
 
-            # METRICS
-            c1, c2, c3 = st.columns(3)
-            c1.metric("⚡ Speed", f"{load_time} ms")
+            c1,c2,c3 = st.columns(3)
+            c1.metric("⚡ Speed", f"{load} ms")
             c2.metric("🔐 SSL", ssl_status)
             c3.metric("🌐 Ports", str(ports))
 
-            # MAIN BOX
             st.markdown(f"""
             <div class="box fade-in">
             <b>Target:</b> {url}<br>
@@ -159,24 +181,19 @@ if submit:
             <b>City:</b> {api.get('city','N/A')}<br>
             <b>Country:</b> {api.get('country','N/A')}<br>
             <b>ISP:</b> {api.get('isp','N/A')}<br>
-            <b>Owner (WHOIS):</b> {owner}<br>
-            <b>Server:</b> {response.headers.get('Server','Hidden')}<br>
-            <b>Status:</b> {response.status_code}<br>
-            <b>Time:</b> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+            <b>Owner:</b> {owner}<br>
+            <b>Server:</b> {res.headers.get('Server','Hidden')}<br>
+            <b>Status:</b> {res.status_code}<br>
+            <b>Time:</b> {datetime.now()}
             </div>
             """, unsafe_allow_html=True)
 
-            # SUBDOMAINS
-            st.markdown("### 🔎 Subdomains Found")
+            st.markdown("### 🔎 Subdomains")
             for s in subs:
                 st.write(f"• {s}")
 
-        except requests.exceptions.Timeout:
-            st.error("⏱️ Timeout")
-        except socket.gaierror:
-            st.error("🌐 Domain not found")
         except:
             st.error("⚠️ Error occurred")
 
 # FOOTER
-st.markdown('<div style="text-align:center; color:#333; font-size:10px; margin-top:60px;">POLAVIC INTELLIGENCE</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#444;font-size:10px;margin-top:60px;">POLAVIC INTELLIGENCE</div>', unsafe_allow_html=True)
