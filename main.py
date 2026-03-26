@@ -3,91 +3,57 @@ import socket
 import requests
 import ssl
 import time
+import matplotlib.pyplot as plt
+from openai import OpenAI
+from reportlab.platypus import SimpleDocTemplate, Paragraph
+from reportlab.lib.styles import getSampleStyleSheet
 
 st.set_page_config(layout="wide")
 
-# ================= UI STYLE =================
+# ================= UI =================
 st.markdown("""
 <style>
-
-/* 🔥 BACKGROUND */
 .stApp {
-    background: radial-gradient(circle at top, #0f0f0f, #000000);
+    background: black;
     color: #00ffcc;
     font-family: monospace;
 }
-
-/* 🌟 TITLE */
 h1 {
-    text-align: center;
-    color: #00ffcc;
-    text-shadow: 0 0 20px #00ffcc;
+    text-align:center;
+    text-shadow:0 0 20px #00ffcc;
 }
-
-/* 📦 CARD STYLE */
 .card {
-    background: rgba(0, 255, 204, 0.05);
-    border: 1px solid rgba(0,255,204,0.2);
-    backdrop-filter: blur(10px);
-    border-radius: 20px;
-    padding: 20px;
-    margin: 15px;
-    text-align: center;
-    box-shadow: 0 0 15px rgba(0,255,204,0.2);
-    transition: 0.3s;
+    background: rgba(0,255,204,0.05);
+    border:1px solid #00ffcc;
+    border-radius:15px;
+    padding:20px;
+    margin:10px;
+    text-align:center;
+    transition:0.3s;
 }
-
-/* ✨ HOVER GLOW */
 .card:hover {
-    transform: translateY(-10px) scale(1.05);
-    box-shadow: 0 0 40px #00ffcc;
+    transform:scale(1.05);
+    box-shadow:0 0 40px #00ffcc;
 }
-
-/* 📊 GRID */
 .row {
-    display: flex;
-    justify-content: space-around;
-    flex-wrap: wrap;
+    display:flex;
+    justify-content:space-around;
 }
-
-/* 🧠 INPUT */
-input {
-    background: black !important;
-    color: #00ffcc !important;
-}
-
-/* 🔘 BUTTON */
-.stButton>button {
-    background: black;
-    color: #00ffcc;
-    border: 1px solid #00ffcc;
-    border-radius: 10px;
-    transition: 0.3s;
-}
-.stButton>button:hover {
-    background: #00ffcc;
-    color: black;
-    box-shadow: 0 0 20px #00ffcc;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
-# ================= TITLE =================
-st.title("🛡️ POLAVIC CYBER SCANNER")
+st.title("🛡️ POLAVIC CYBER AI SCANNER")
 
-# ================= SCAN FUNCTION =================
+# ================= SCAN =================
 def scan(domain):
     ip = socket.gethostbyname(domain)
-
-    api = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
-    res = requests.get(f"http://{domain}", timeout=5)
+    api = requests.get(f"http://ip-api.com/json/{ip}").json()
+    res = requests.get(f"http://{domain}")
 
     ssl_status = "Secure"
     try:
         ctx = ssl.create_default_context()
         with ctx.wrap_socket(socket.socket(), server_hostname=domain) as s:
-            s.settimeout(3)
             s.connect((domain,443))
     except:
         ssl_status = "Not Secure"
@@ -101,60 +67,86 @@ def scan(domain):
         "ssl": ssl_status
     }
 
+# ================= AI =================
+def ai_analysis(data):
+    try:
+        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+        res = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role":"system","content":"You are a cybersecurity expert."},
+                {"role":"user","content":f"Analyze this data:\n{data}"}
+            ]
+        )
+        return res.choices[0].message.content
+    except:
+        return "AI unavailable (API issue)"
+
+# ================= RISK =================
+def risk_score(data):
+    score = 0
+    if data["ssl"] == "Not Secure":
+        score += 40
+    if data["status"] != 200:
+        score += 30
+    return min(score,100)
+
+# ================= PDF =================
+def make_pdf(text):
+    file="report.pdf"
+    doc=SimpleDocTemplate(file)
+    styles=getSampleStyleSheet()
+    doc.build([Paragraph(text, styles["Normal"])])
+    return file
+
 # ================= UI =================
 domain = st.text_input("🌐 Enter Target Domain")
 
-if st.button("🚀 Scan Target"):
+if st.button("🚀 Scan"):
     if domain:
 
-        with st.spinner("Scanning target..."):
-            time.sleep(1)
-            try:
-                data = scan(domain)
+        # ===== Terminal Effect =====
+        terminal = st.empty()
+        logs = ["Connecting...", "Fetching IP...", "Checking SSL...", "Analyzing..."]
+        for log in logs:
+            terminal.text(log)
+            time.sleep(0.5)
 
-                # ===== CARDS UI =====
-                st.markdown(f"""
-                <div class="row">
+        data = scan(domain)
 
-                <div class="card">
-                <h3>🌐 IP Address</h3>
-                <p>{data['ip']}</p>
-                </div>
+        # ===== Cards =====
+        st.markdown(f"""
+        <div class="row">
+        <div class="card"><h3>IP</h3><p>{data['ip']}</p></div>
+        <div class="card"><h3>City</h3><p>{data['city']}</p></div>
+        <div class="card"><h3>Country</h3><p>{data['country']}</p></div>
+        </div>
+        <div class="row">
+        <div class="card"><h3>ISP</h3><p>{data['isp']}</p></div>
+        <div class="card"><h3>Status</h3><p>{data['status']}</p></div>
+        <div class="card"><h3>SSL</h3><p>{data['ssl']}</p></div>
+        </div>
+        """, unsafe_allow_html=True)
 
-                <div class="card">
-                <h3>🏙️ City</h3>
-                <p>{data['city']}</p>
-                </div>
+        # ===== Risk =====
+        score = risk_score(data)
+        st.subheader("⚠️ Risk Score")
+        st.progress(score)
 
-                <div class="card">
-                <h3>🌍 Country</h3>
-                <p>{data['country']}</p>
-                </div>
+        # ===== Chart =====
+        fig, ax = plt.subplots()
+        ax.bar(["Risk"], [score])
+        st.pyplot(fig)
 
-                </div>
+        # ===== AI =====
+        st.subheader("🤖 AI Analysis")
+        ai = ai_analysis(data)
+        st.write(ai)
 
-                <div class="row">
-
-                <div class="card">
-                <h3>📡 ISP</h3>
-                <p>{data['isp']}</p>
-                </div>
-
-                <div class="card">
-                <h3>📶 Status Code</h3>
-                <p>{data['status']}</p>
-                </div>
-
-                <div class="card">
-                <h3>🔐 SSL Security</h3>
-                <p>{data['ssl']}</p>
-                </div>
-
-                </div>
-                """, unsafe_allow_html=True)
-
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
+        # ===== PDF =====
+        pdf = make_pdf(str(data)+"\n\n"+ai)
+        with open(pdf,"rb") as f:
+            st.download_button("📄 Download Report", f, file_name="report.pdf")
 
     else:
-        st.warning("⚠️ Enter a domain first")
+        st.warning("Enter domain")
