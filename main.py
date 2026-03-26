@@ -7,7 +7,7 @@ from datetime import datetime
 # 1. PAGE SETTINGS
 st.set_page_config(page_title="POLAVIC", page_icon="🛡️", layout="centered")
 
-# 2. PREMIUM AESTHETIC CSS
+# 2. PREMIUM AESTHETIC CSS (Clean & High-Tech)
 st.markdown("""
     <style>
         .stApp { background-color: #000000 !important; color: #ffffff !important; }
@@ -19,24 +19,26 @@ st.markdown("""
         .data-item:hover { border-color: #ff4b4b; }
         .label { color: #666; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; display: block; }
         .value { color: #fff; font-size: 14px; font-weight: bold; display: block; margin-top: 4px; font-family: 'monospace'; }
-        .stButton>button { background-color: #ff4b4b !important; color: white !important; width: 100%; border-radius: 5px; border: none; font-weight: bold; height: 48px; margin-top: 20px; letter-spacing: 2px; transition: 0.3s; }
+        
+        /* Red Button Design */
+        .stButton>button { background-color: #ff4b4b !important; color: white !important; width: 100%; border-radius: 5px; border: none; font-weight: bold; height: 48px; margin-top: 10px; letter-spacing: 2px; transition: 0.3s; }
         .stButton>button:hover { background-color: #ff2b2b !important; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255, 75, 75, 0.4); }
     </style>
 """, unsafe_allow_html=True)
 
-# UI Header
+# 🏆 POLAVIC LOGO (Aesthetic Header)
 st.markdown('<div class="main-title">POLAVIC</div>', unsafe_allow_html=True)
 
-# 3. SCANNING ENGINE (All Features Back!)
+# 3. INPUT FORM
 with st.form("polavic_scan_form"):
     url_input = st.text_input("", placeholder="ENTER DOMAIN (e.g. google.com)")
-    submit = st.form_submit_button("INITIATE SECURITY SCAN")
+    submit = st.form_submit_button("RUN SECURITY SCAN")
 
 if submit and url_input:
     target = url_input.replace("https://", "").replace("http://", "").split('/')[0]
-    with st.spinner('ACCESSING GLOBAL TERMINALS...'):
+    with st.spinner('PULSING TERMINAL...'):
         try:
-            # Gathering Features
+            # 🔄 SCAN ENGINE (All Features!)
             ip_addr = socket.gethostbyname(target)
             res = requests.get(f"http://ip-api.com/json/{ip_addr}").json()
             
@@ -44,46 +46,43 @@ if submit and url_input:
             socket.create_connection((target, 80), timeout=2)
             ping = f"{round((time.time() - start) * 1000, 2)}ms"
             
-            # Technology Check
+            # Tech Stack Check
             response = requests.get(f"http://{target}", timeout=5)
             server_tech = response.headers.get('Server', 'PROTECTED')
             
             scan_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-            # Result Data Dictionary
-            data = {
-                "Target Host": target,
-                "IPv4 Address": ip_addr,
-                "Location": f"{res.get('city', 'N/A')}, {res.get('country', 'N/A')}",
-                "Response Time": ping,
-                "Server Stack": server_tech,
-                "ISP Provider": res.get('isp', 'N/A'),
-                "Security Status": "ENCRYPTED / SECURE",
-                "Scan Timestamp": scan_time
-            }
-
-            # 4. RESULTS UI
+            # 📦 RESULT UI (8 Features Wapas)
             st.markdown(f"""
             <div id="printable-area" class="report-box">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <span style="color:#ff4b4b; font-weight:bold; letter-spacing:2px;">🛡️ SYSTEM ACTIVE</span>
-                    <span style="font-size:10px; color:#444;">POLAVIC v8.5</span>
+                    <span style="font-size:10px; color:#444;">POLAVIC INTELLIGENCE</span>
                 </div>
                 <div class="data-grid">
-                    {" ".join([f'<div class="data-item"><span class="label">{k}</span><span class="value">{v}</span></div>' for k,v in data.items()])}
+                    <div class="data-item"><span class="label">Target Host</span><span class="value">{target}</span></div>
+                    <div class="data-item"><span class="label">IPv4 Address</span><span class="value">{ip_addr}</span></div>
+                    <div class="data-item"><span class="label">City</span><span class="value">{res.get('city', 'N/A')}</span></div>
+                    <div class="data-item"><span class="label">Country</span><span class="value">{res.get('country', 'N/A')}</span></div>
+                    <div class="data-item"><span class="label">Server Technology</span><span class="value">{server_tech}</span></div>
+                    <div class="data-item"><span class="label">Response Time</span><span class="value">{ping}</span></div>
+                    <div class="data-item"><span class="label">ISP Provider</span><span class="value">{res.get('isp', 'N/A')}</span></div>
+                    <div class="data-item"><span class="label">Scan Time</span><span class="value">{scan_time}</span></div>
+                    <div class="data-item"><span class="label">Status</span><span class="value">SECURE / ENCRYPTED</span></div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
             st.balloons()
 
-            # 5. SMART PDF/PRINT BUTTON
+            # 📥 SMART DOWNLOAD BUTTON (No Library Jugaad)
+            # Ye hamesha dikhega aur bina error ke PDF print karega
             if st.button("📥 DOWNLOAD AUDIT REPORT (PDF)"):
                 st.markdown("<script>window.parent.print();</script>", unsafe_allow_html=True)
             
             st.info("💡 Tip: Print screen khulne par 'Save as PDF' select karein.")
 
         except Exception as e:
-            st.error(f"SYSTEM ERROR: Target Unreachable or Invalid Input.")
+            st.error(f"SYSTEM ERROR: Target Unreachable. Please try again.")
 
-# Footer
+# FOOTER
 st.markdown('<div style="text-align:center; color:#222; font-size:10px; margin-top:60px; letter-spacing:3px;">POLAVIC INTELLIGENCE // SECURE DATA PORTAL</div>', unsafe_allow_html=True)
