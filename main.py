@@ -8,20 +8,19 @@ import sqlite3
 import matplotlib.pyplot as plt
 from openai import OpenAI
 
-# ================= Streamlit Page Config =================
 st.set_page_config(layout="wide", page_title="POLAVIC CYBER AI DASHBOARD")
 
-# ================= Database =================
+# ================= DB =================
 conn = sqlite3.connect("data.db", check_same_thread=False)
 c = conn.cursor()
 c.execute("CREATE TABLE IF NOT EXISTS scans(domain TEXT, result TEXT, time TEXT)")
 conn.commit()
 
-# ================= Fullscreen Background =================
+# ================= Background Theme =================
 st.markdown(
 """
 <div style="
-background-image: url('https://images.unsplash.com/photo-1612831455542-2f5c7c446a05');
+background-image: url('https://images.unsplash.com/photo-1622552288394-d61d2a5e3825?auto=format&fit=crop&w=1950&q=80');
 background-size: cover;
 background-position: center;
 position: fixed;
@@ -29,13 +28,14 @@ top: 0;
 left: 0;
 width: 100%;
 height: 100%;
+filter: brightness(0.3);
 z-index: -1;">
 </div>
 """,
 unsafe_allow_html=True
 )
 
-# ================= CSS Styling =================
+# ================= CSS =================
 st.markdown("""
 <style>
 .stApp {
@@ -71,17 +71,16 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ================= Title =================
 st.title("🛡️ POLAVIC CYBER AI DASHBOARD")
 
-# ================= Sidebar Menu =================
+# ================= Sidebar =================
 menu = st.sidebar.radio("📂 Navigation", ["Scan", "History", "Dashboard"])
 
 # ================= Validation =================
 def valid_domain(domain):
     return re.match(r"^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$", domain)
 
-# ================= Scan Function =================
+# ================= Scan =================
 def scan(domain):
     try:
         ip = socket.gethostbyname(domain)
@@ -114,7 +113,7 @@ def scan(domain):
         "ssl": ssl_status
     }
 
-# ================= AI Analysis =================
+# ================= AI =================
 def ai_analysis(data):
     try:
         client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -129,7 +128,7 @@ def ai_analysis(data):
     except:
         return "AI unavailable"
 
-# ================= Risk Score =================
+# ================= Risk =================
 def risk_score(data):
     score = 0
     if data["ssl"] == "Not Secure":
@@ -190,7 +189,7 @@ if menu == "Scan":
             st.subheader("🤖 AI Analysis")
             st.write(ai_analysis(data))
 
-# ================= History Page =================
+# ================= History =================
 elif menu == "History":
     st.subheader("📜 Scan History")
     c.execute("SELECT * FROM scans ORDER BY time DESC")
@@ -203,7 +202,7 @@ elif menu == "History":
         conn.commit()
         st.success("History Cleared")
 
-# ================= Dashboard Page =================
+# ================= Dashboard =================
 elif menu == "Dashboard":
     st.subheader("📊 Overview")
     c.execute("SELECT COUNT(*) FROM scans")
