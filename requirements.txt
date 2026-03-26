@@ -3,3 +3,4 @@ requests
 whois
 openai
 reportlab
+matplotlib
