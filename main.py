@@ -3,90 +3,145 @@ import socket
 import requests
 import time
 from datetime import datetime
+import re
+import ssl
+import whois
 
-# 1. PAGE SETTINGS
+# PAGE CONFIG
 st.set_page_config(page_title="POLAVIC", page_icon="🛡️", layout="centered")
 
-# 2. PREMIUM AESTHETIC CSS
+# CSS
 st.markdown("""
-    <style>
-        .stApp { background-color: #000000 !important; color: #ffffff !important; }
-        [data-testid="stSidebarNav"], button[kind="header"], header { display: none !important; }
-        
-        /* New Logo Style */
-        .logo-text {
-            color: #ffffff;
-            font-family: 'Courier New', monospace;
-            font-size: 45px;
-            font-weight: bold;
-            text-align: center;
-            margin-top: -50px;
-            margin-bottom: 20px;
-            letter-spacing: 12px;
-            text-shadow: 0 0 15px #ff4b4b, 0 0 30px #ff4b4b;
-        }
-
-        .report-box { background: #0a0a0a; padding: 25px; border: 1px solid #222; border-top: 4px solid #ff4b4b; border-radius: 10px; margin-top: 20px; box-shadow: 0 10px 30px rgba(255, 75, 75, 0.1); }
-        .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-        .data-item { background: #050505; padding: 12px; border: 1px solid #1a1a1a; border-radius: 5px; }
-        .label { color: #666; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; display: block; }
-        .value { color: #fff; font-size: 14px; font-weight: bold; display: block; margin-top: 4px; font-family: 'monospace'; }
-        
-        .stButton>button { background-color: #ff4b4b !important; color: white !important; width: 100%; border-radius: 5px; border: none; font-weight: bold; height: 48px; margin-top: 10px; letter-spacing: 2px; }
-    </style>
+<style>
+.stApp { background-color: #000000; color: #ffffff; }
+.logo-text {
+    text-align:center;
+    font-size:42px;
+    letter-spacing:10px;
+    font-weight:bold;
+    text-shadow:0 0 10px red;
+}
+.box {
+    background:#0a0a0a;
+    padding:20px;
+    border-left:4px solid red;
+    border-radius:8px;
+    margin-top:20px;
+}
+</style>
 """, unsafe_allow_html=True)
 
-# 🏆 FORCE LOGO (Direct HTML)
-st.markdown('<h1 class="logo-text">POLAVIC</h1>', unsafe_allow_html=True)
+st.markdown('<div class="logo-text">POLAVIC</div>', unsafe_allow_html=True)
 
-# 3. INPUT FORM
-with st.form("polavic_scan_form"):
-    url_input = st.text_input("", placeholder="ENTER DOMAIN (e.g. google.com)")
-    submit = st.form_submit_button("RUN SECURITY SCAN")
+# VALIDATION
+def is_valid_domain(domain):
+    pattern = r"^(?!:\/\/)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$"
+    return re.match(pattern, domain)
 
-if submit and url_input:
-    target = url_input.replace("https://", "").replace("http://", "").split('/')[0]
-    with st.spinner('PULSING TERMINAL...'):
+# SSL CHECK
+def check_ssl(domain):
+    try:
+        ctx = ssl.create_default_context()
+        with ctx.wrap_socket(socket.socket(), server_hostname=domain) as s:
+            s.settimeout(3)
+            s.connect((domain, 443))
+            return "Secure ✅"
+    except:
+        return "Not Secure ❌"
+
+# PORT SCAN
+def scan_ports(domain):
+    ports = [21, 22, 80, 443, 8080]
+    open_ports = []
+    for port in ports:
         try:
-            # 🔄 SCAN ENGINE
-            ip_addr = socket.gethostbyname(target)
-            res = requests.get(f"http://ip-api.com/json/{ip_addr}").json()
-            
-            start = time.time()
-            socket.create_connection((target, 80), timeout=2)
-            ping = f"{round((time.time() - start) * 1000, 2)}ms"
-            
-            response = requests.get(f"http://{target}", timeout=5)
-            server_tech = response.headers.get('Server', 'PROTECTED')
-            scan_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            s = socket.socket()
+            s.settimeout(1)
+            s.connect((domain, port))
+            open_ports.append(port)
+            s.close()
+        except:
+            pass
+    return open_ports if open_ports else ["None"]
 
-            # 📦 RESULT UI
-            st.markdown(f"""
-            <div id="printable-area" class="report-box">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="color:#ff4b4b; font-weight:bold; letter-spacing:2px;">🛡️ SYSTEM ACTIVE</span>
-                    <span style="font-size:10px; color:#444;">POLAVIC INTELLIGENCE</span>
+# WHOIS
+def get_whois(domain):
+    try:
+        w = whois.whois(domain)
+        return w.org if w.org else "Hidden"
+    except:
+        return "Unavailable"
+
+# SUBDOMAIN CHECK (basic)
+def subdomain_scan(domain):
+    common = ["www", "mail", "ftp", "test", "dev"]
+    found = []
+    for sub in common:
+        try:
+            socket.gethostbyname(f"{sub}.{domain}")
+            found.append(f"{sub}.{domain}")
+        except:
+            pass
+    return found if found else ["None"]
+
+# FORM
+with st.form("scan"):
+    url = st.text_input("", placeholder="Enter domain (example.com)")
+    submit = st.form_submit_button("RUN FULL SCAN")
+
+if submit:
+    if not is_valid_domain(url):
+        st.error("❌ Invalid domain")
+    else:
+        with st.spinner("Running deep scan..."):
+            try:
+                start = time.time()
+
+                ip = socket.gethostbyname(url)
+                api = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
+                response = requests.get(f"http://{url}", timeout=5)
+
+                load_time = round((time.time() - start) * 1000, 2)
+
+                ssl_status = check_ssl(url)
+                ports = scan_ports(url)
+                owner = get_whois(url)
+                subs = subdomain_scan(url)
+
+                st.success("✅ FULL SCAN COMPLETE")
+
+                # METRICS
+                c1, c2, c3 = st.columns(3)
+                c1.metric("⚡ Speed", f"{load_time} ms")
+                c2.metric("🔐 SSL", ssl_status)
+                c3.metric("🌐 Ports", str(ports))
+
+                # MAIN INFO
+                st.markdown(f"""
+                <div class="box">
+                <b>Target:</b> {url}<br>
+                <b>IP:</b> {ip}<br>
+                <b>City:</b> {api.get('city','N/A')}<br>
+                <b>Country:</b> {api.get('country','N/A')}<br>
+                <b>ISP:</b> {api.get('isp','N/A')}<br>
+                <b>Owner (WHOIS):</b> {owner}<br>
+                <b>Server:</b> {response.headers.get('Server','Hidden')}<br>
+                <b>Status:</b> {response.status_code}<br>
+                <b>Time:</b> {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
                 </div>
-                <div class="data-grid">
-                    <div class="data-item"><span class="label">Target Host</span><span class="value">{target}</span></div>
-                    <div class="data-item"><span class="label">IPv4 Address</span><span class="value">{ip_addr}</span></div>
-                    <div class="data-item"><span class="label">City</span><span class="value">{res.get('city', 'N/A')}</span></div>
-                    <div class="data-item"><span class="label">Country</span><span class="value">{res.get('country', 'N/A')}</span></div>
-                    <div class="data-item"><span class="label">Server Technology</span><span class="value">{server_tech}</span></div>
-                    <div class="data-item"><span class="label">Response Time</span><span class="value">{ping}</span></div>
-                    <div class="data-item"><span class="label">ISP Provider</span><span class="value">{res.get('isp', 'N/A')}</span></div>
-                    <div class="data-item"><span class="label">Scan Time</span><span class="value">{scan_time}</span></div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            st.balloons()
+                """, unsafe_allow_html=True)
 
-            # 📥 DOWNLOAD BUTTON
-            if st.button("📥 DOWNLOAD AUDIT REPORT (PDF)"):
-                st.markdown("<script>window.parent.print();</script>", unsafe_allow_html=True)
+                # SUBDOMAINS
+                st.markdown("### 🔎 Subdomains Found")
+                for s in subs:
+                    st.write(f"• {s}")
 
-        except Exception as e:
-            st.error(f"SYSTEM ERROR: Try again.")
+            except requests.exceptions.Timeout:
+                st.error("⏱️ Timeout")
+            except socket.gaierror:
+                st.error("🌐 Domain not found")
+            except Exception:
+                st.error("⚠️ Error occurred")
 
 # FOOTER
-st.markdown('<div style="text-align:center; color:#222; font-size:10px; margin-top:60px; letter-spacing:3px;">POLAVIC INTELLIGENCE // SECURE DATA PORTAL</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center; color:#333; font-size:10px; margin-top:60px;">POLAVIC INTELLIGENCE</div>', unsafe_allow_html=True)
