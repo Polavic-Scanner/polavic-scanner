@@ -7,6 +7,8 @@ import re
 import sqlite3
 import matplotlib.pyplot as plt
 from bs4 import BeautifulSoup
+from fpdf import FPDF
+from openai import OpenAI
 
 st.set_page_config(layout="wide", page_title="CYBER AI PRO")
 
@@ -81,7 +83,7 @@ def check_ports(domain):
         s.close()
     return open_ports
 
-# ===== SCAN =====
+# ===== SCAN FUNCTION =====
 def scan(domain):
     try:
         ip = socket.gethostbyname(domain)
@@ -126,7 +128,7 @@ def scan(domain):
         "ports": ports
     }
 
-# ===== RISK =====
+# ===== RISK SCORE =====
 def risk(data):
     score = 0
     if data["ssl"] == "Not Secure":
@@ -139,9 +141,50 @@ def risk(data):
         score += 10
     return min(score,100)
 
+# ===== AI ANALYSIS =====
+def ai_analysis(data):
+    try:
+        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+        content = f"""
+        Analyze this website scan result for cybersecurity issues:
+        {data}
+        Provide vulnerabilities, suggestions and risk assessment in short.
+        """
+        res = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role":"system","content":"You are a cybersecurity expert."},
+                {"role":"user","content":content}
+            ]
+        )
+        return res.choices[0].message.content
+    except:
+        return "AI analysis unavailable"
+
+# ===== PDF REPORT =====
+def generate_pdf(domain, data, ai_text):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200,10,txt="CYBER SCAN REPORT",ln=True,align='C')
+    pdf.ln(5)
+    pdf.cell(200,10,txt=f"Domain: {domain}",ln=True)
+    pdf.cell(200,10,txt=f"IP: {data['ip']}",ln=True)
+    pdf.cell(200,10,txt=f"City: {data['city']}",ln=True)
+    pdf.cell(200,10,txt=f"Country: {data['country']}",ln=True)
+    pdf.cell(200,10,txt=f"Status: {data['status']}",ln=True)
+    pdf.cell(200,10,txt=f"SSL: {data['ssl']}",ln=True)
+    pdf.cell(200,10,txt=f"Title: {data['title']}",ln=True)
+    pdf.cell(200,10,txt=f"Open Ports: {data['ports']}",ln=True)
+    pdf.ln(5)
+    pdf.multi_cell(0,8,txt="AI Analysis:\n"+ai_text)
+    pdf.output("report.pdf")
+
 # ===== SESSION STATE =====
 if "scan_result" not in st.session_state:
     st.session_state.scan_result = None
+if "ai_text" not in st.session_state:
+    st.session_state.ai_text = None
 
 # ===== SCAN PAGE =====
 if menu == "Scan":
@@ -151,7 +194,7 @@ if menu == "Scan":
             st.error("Invalid domain")
         else:
             term = st.empty()
-            for t in ["Initializing...", "Scanning Ports...", "Fetching Data..."]:
+            for t in ["Initializing...", "Scanning Ports...", "Fetching Data...", "AI Analysis..."]:
                 term.text(t)
                 time.sleep(0.5)
 
@@ -195,6 +238,20 @@ if menu == "Scan":
             # Headers
             st.subheader("📡 Headers")
             st.json(data["headers"])
+
+            # AI ANALYSIS
+            st.subheader("🤖 AI Analysis")
+            ai_text = ai_analysis(data)
+            st.session_state.ai_text = ai_text
+            st.text(ai_text)
+
+    # ===== PDF DOWNLOAD =====
+    if st.session_state.scan_result and st.session_state.ai_text:
+        domain, data = st.session_state.scan_result
+        ai_text = st.session_state.ai_text
+        generate_pdf(domain, data, ai_text)
+        with open("report.pdf", "rb") as f:
+            st.download_button("📄 Download PDF Report", f, file_name="report.pdf")
 
 # ===== HISTORY PAGE =====
 elif menu == "History":
