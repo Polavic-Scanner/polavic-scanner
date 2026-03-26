@@ -8,27 +8,43 @@ import sqlite3
 import matplotlib.pyplot as plt
 from openai import OpenAI
 
+# ================= Streamlit Page Config =================
 st.set_page_config(layout="wide", page_title="POLAVIC CYBER AI DASHBOARD")
 
-# ================= DB =================
+# ================= Database =================
 conn = sqlite3.connect("data.db", check_same_thread=False)
 c = conn.cursor()
 c.execute("CREATE TABLE IF NOT EXISTS scans(domain TEXT, result TEXT, time TEXT)")
 conn.commit()
 
-# ================= STYLING =================
+# ================= Fullscreen Background =================
+st.markdown(
+"""
+<div style="
+background-image: url('https://images.unsplash.com/photo-1612831455542-2f5c7c446a05');
+background-size: cover;
+background-position: center;
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+z-index: -1;">
+</div>
+""",
+unsafe_allow_html=True
+)
+
+# ================= CSS Styling =================
 st.markdown("""
 <style>
 .stApp {
-    background-image: url("https://images.unsplash.com/photo-1612831455542-2f5c7c446a05");
-    background-size: cover;
-    background-attachment: fixed;
     color: #00ffcc;
     font-family: monospace;
 }
 
 .card {
-    background: rgba(0,255,204,0.1);
+    background: rgba(0,255,204,0.15);
     border:1px solid #00ffcc;
     border-radius:15px;
     padding:20px;
@@ -55,19 +71,25 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ================= Title =================
 st.title("🛡️ POLAVIC CYBER AI DASHBOARD")
 
-# ================= SIDEBAR =================
+# ================= Sidebar Menu =================
 menu = st.sidebar.radio("📂 Navigation", ["Scan", "History", "Dashboard"])
 
-# ================= VALIDATION =================
+# ================= Validation =================
 def valid_domain(domain):
     return re.match(r"^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$", domain)
 
-# ================= SCAN =================
+# ================= Scan Function =================
 def scan(domain):
-    ip = socket.gethostbyname(domain)
-    api = requests.get(f"http://ip-api.com/json/{ip}").json()
+    try:
+        ip = socket.gethostbyname(domain)
+        api = requests.get(f"http://ip-api.com/json/{ip}").json()
+    except:
+        ip = "Unknown"
+        api = {}
+    
     try:
         res = requests.get(f"http://{domain}", timeout=3)
         status_code = res.status_code
@@ -92,7 +114,7 @@ def scan(domain):
         "ssl": ssl_status
     }
 
-# ================= AI =================
+# ================= AI Analysis =================
 def ai_analysis(data):
     try:
         client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -107,7 +129,7 @@ def ai_analysis(data):
     except:
         return "AI unavailable"
 
-# ================= RISK =================
+# ================= Risk Score =================
 def risk_score(data):
     score = 0
     if data["ssl"] == "Not Secure":
@@ -116,10 +138,9 @@ def risk_score(data):
         score += 30
     return min(score,100)
 
-# ================= SCAN PAGE =================
+# ================= Scan Page =================
 if menu == "Scan":
     domain = st.text_input("🌐 Enter Domain")
-
     if st.button("🚀 Scan"):
 
         if not valid_domain(domain):
@@ -159,8 +180,8 @@ if menu == "Scan":
 
             # Chart
             fig, ax = plt.subplots()
-            fig.patch.set_facecolor('#00000000')
-            ax.set_facecolor('#00000000')
+            fig.patch.set_facecolor('none')
+            ax.set_facecolor('none')
             ax.bar(["Risk"], [score], color='#00ffcc')
             ax.tick_params(colors='#00ffcc')
             st.pyplot(fig)
@@ -169,7 +190,7 @@ if menu == "Scan":
             st.subheader("🤖 AI Analysis")
             st.write(ai_analysis(data))
 
-# ================= HISTORY =================
+# ================= History Page =================
 elif menu == "History":
     st.subheader("📜 Scan History")
     c.execute("SELECT * FROM scans ORDER BY time DESC")
@@ -182,7 +203,7 @@ elif menu == "History":
         conn.commit()
         st.success("History Cleared")
 
-# ================= DASHBOARD =================
+# ================= Dashboard Page =================
 elif menu == "Dashboard":
     st.subheader("📊 Overview")
     c.execute("SELECT COUNT(*) FROM scans")
@@ -194,8 +215,8 @@ elif menu == "Dashboard":
     data = c.fetchall()
     if data:
         fig, ax = plt.subplots()
-        ax.set_facecolor('#00000000')
-        fig.patch.set_facecolor('#00000000')
+        ax.set_facecolor('none')
+        fig.patch.set_facecolor('none')
         ax.plot(range(len(data)), color='#00ffcc', marker='o')
         ax.tick_params(colors='#00ffcc')
         st.pyplot(fig)
