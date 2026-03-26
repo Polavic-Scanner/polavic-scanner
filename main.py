@@ -3,10 +3,11 @@ import socket
 import requests
 import ssl
 import time
+import re
 import matplotlib.pyplot as plt
-from openai import OpenAI
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
+from openai import OpenAI
 
 st.set_page_config(layout="wide")
 
@@ -38,22 +39,29 @@ h1 {
 .row {
     display:flex;
     justify-content:space-around;
+    flex-wrap:wrap;
 }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("🛡️ POLAVIC CYBER AI SCANNER")
 
+# ================= VALIDATION =================
+def valid_domain(domain):
+    pattern = r"^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$"
+    return re.match(pattern, domain)
+
 # ================= SCAN =================
 def scan(domain):
     ip = socket.gethostbyname(domain)
-    api = requests.get(f"http://ip-api.com/json/{ip}").json()
-    res = requests.get(f"http://{domain}")
+    api = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
+    res = requests.get(f"http://{domain}", timeout=5)
 
     ssl_status = "Secure"
     try:
         ctx = ssl.create_default_context()
         with ctx.wrap_socket(socket.socket(), server_hostname=domain) as s:
+            s.settimeout(3)
             s.connect((domain,443))
     except:
         ssl_status = "Not Secure"
@@ -76,11 +84,12 @@ def ai_analysis(data):
             messages=[
                 {"role":"system","content":"You are a cybersecurity expert."},
                 {"role":"user","content":f"Analyze this data:\n{data}"}
-            ]
+            ],
+            max_tokens=200
         )
         return res.choices[0].message.content
     except:
-        return "AI unavailable (API issue)"
+        return "⚠️ AI temporarily unavailable"
 
 # ================= RISK =================
 def risk_score(data):
@@ -103,50 +112,67 @@ def make_pdf(text):
 domain = st.text_input("🌐 Enter Target Domain")
 
 if st.button("🚀 Scan"):
-    if domain:
+
+    if not valid_domain(domain):
+        st.error("❌ Invalid domain format")
+
+    else:
+        # ===== Loading =====
+        progress = st.progress(0)
+        for i in range(100):
+            time.sleep(0.01)
+            progress.progress(i+1)
 
         # ===== Terminal Effect =====
         terminal = st.empty()
         logs = ["Connecting...", "Fetching IP...", "Checking SSL...", "Analyzing..."]
         for log in logs:
             terminal.text(log)
-            time.sleep(0.5)
+            time.sleep(0.4)
 
-        data = scan(domain)
+        try:
+            data = scan(domain)
 
-        # ===== Cards =====
-        st.markdown(f"""
-        <div class="row">
-        <div class="card"><h3>IP</h3><p>{data['ip']}</p></div>
-        <div class="card"><h3>City</h3><p>{data['city']}</p></div>
-        <div class="card"><h3>Country</h3><p>{data['country']}</p></div>
-        </div>
-        <div class="row">
-        <div class="card"><h3>ISP</h3><p>{data['isp']}</p></div>
-        <div class="card"><h3>Status</h3><p>{data['status']}</p></div>
-        <div class="card"><h3>SSL</h3><p>{data['ssl']}</p></div>
-        </div>
-        """, unsafe_allow_html=True)
+            # ===== CARDS =====
+            st.markdown(f"""
+            <div class="row">
+            <div class="card"><h3>🌐 IP</h3><p>{data['ip']}</p></div>
+            <div class="card"><h3>🏙️ City</h3><p>{data['city']}</p></div>
+            <div class="card"><h3>🌍 Country</h3><p>{data['country']}</p></div>
+            </div>
+            <div class="row">
+            <div class="card"><h3>📡 ISP</h3><p>{data['isp']}</p></div>
+            <div class="card"><h3>📶 Status</h3><p>{data['status']}</p></div>
+            <div class="card"><h3>🔐 SSL</h3><p>{data['ssl']}</p></div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        # ===== Risk =====
-        score = risk_score(data)
-        st.subheader("⚠️ Risk Score")
-        st.progress(score)
+            # ===== Risk =====
+            score = risk_score(data)
+            st.subheader("⚠️ Risk Score")
+            st.progress(score)
 
-        # ===== Chart =====
-        fig, ax = plt.subplots()
-        ax.bar(["Risk"], [score])
-        st.pyplot(fig)
+            if score < 30:
+                st.success("🟢 Low Risk")
+            elif score < 70:
+                st.warning("🟡 Medium Risk")
+            else:
+                st.error("🔴 High Risk")
 
-        # ===== AI =====
-        st.subheader("🤖 AI Analysis")
-        ai = ai_analysis(data)
-        st.write(ai)
+            # ===== Chart =====
+            fig, ax = plt.subplots()
+            ax.bar(["Risk"], [score])
+            st.pyplot(fig)
 
-        # ===== PDF =====
-        pdf = make_pdf(str(data)+"\n\n"+ai)
-        with open(pdf,"rb") as f:
-            st.download_button("📄 Download Report", f, file_name="report.pdf")
+            # ===== AI =====
+            st.subheader("🤖 AI Analysis")
+            ai = ai_analysis(data)
+            st.write(ai)
 
-    else:
-        st.warning("Enter domain")
+            # ===== PDF =====
+            pdf = make_pdf(str(data)+"\n\n"+ai)
+            with open(pdf,"rb") as f:
+                st.download_button("📄 Download Report", f, file_name="report.pdf")
+
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
