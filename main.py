@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 from fpdf import FPDF
 from openai import OpenAI
 
-st.set_page_config(layout="wide", page_title="POLAVIC CYBER AI")
+st.set_page_config(layout="wide", page_title="POLAVIC CYBER AI PRO")
 
 # ===== DATABASE =====
 conn = sqlite3.connect("data.db", check_same_thread=False)
@@ -60,7 +60,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🛡️ POLAVIC CYBER AI PRO DASHBOARD")
+st.title("🛡️ POLAVIC CYBER AI")
 
 menu = st.sidebar.radio("Navigation", ["Scan", "History"])
 
