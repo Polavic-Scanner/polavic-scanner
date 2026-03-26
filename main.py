@@ -7,9 +7,10 @@ import re
 import ssl
 import whois
 
+# PAGE CONFIG
 st.set_page_config(page_title="POLAVIC", page_icon="🛡️", layout="centered")
 
-# 🎨 FULL 3D THEME CSS
+# 🌌 3D + ANIMATION UI
 st.markdown("""
 <style>
 .stApp {
@@ -23,8 +24,8 @@ st.markdown("""
     font-size:48px;
     letter-spacing:12px;
     font-weight:bold;
-    text-shadow:0 0 20px red;
     animation: float 3s ease-in-out infinite;
+    text-shadow:0 0 20px red;
 }
 @keyframes float {
     0% {transform: translateY(0);}
@@ -43,7 +44,7 @@ st.markdown("""
     100% {transform: translateX(100%);}
 }
 
-/* 3D BOX */
+/* CARD */
 .box {
     background: rgba(255,255,255,0.05);
     backdrop-filter: blur(12px);
@@ -105,7 +106,7 @@ def check_ssl(domain):
     except:
         return "Not Secure ❌"
 
-# PORTS
+# PORT SCAN
 def scan_ports(domain):
     ports = [21,22,80,443,8080]
     open_ports = []
@@ -139,6 +140,32 @@ def subdomain_scan(domain):
             pass
     return found if found else ["None"]
 
+# 🤖 AI ANALYSIS (SMART LOGIC)
+def ai_analysis(ssl_status, ports, response_code):
+    score = 0
+    issues = []
+
+    if "Not Secure" in ssl_status:
+        score -= 2
+        issues.append("No SSL encryption")
+
+    if 21 in ports or 22 in ports:
+        score -= 1
+        issues.append("Sensitive ports open")
+
+    if response_code != 200:
+        score -= 1
+        issues.append("Website not stable")
+
+    if score >= 0:
+        status = "🟢 Safe"
+    elif score == -1:
+        status = "🟡 Medium Risk"
+    else:
+        status = "🔴 Risky"
+
+    return status, issues
+
 # FORM
 with st.form("scan"):
     url = st.text_input("", placeholder="Enter domain (example.com)")
@@ -167,6 +194,8 @@ if submit:
             owner = get_whois(url)
             subs = subdomain_scan(url)
 
+            ai_status, issues = ai_analysis(ssl_status, ports, res.status_code)
+
             st.success("✅ SCAN COMPLETE")
 
             c1,c2,c3 = st.columns(3)
@@ -188,9 +217,19 @@ if submit:
             </div>
             """, unsafe_allow_html=True)
 
+            # SUBDOMAINS
             st.markdown("### 🔎 Subdomains")
             for s in subs:
                 st.write(f"• {s}")
+
+            # AI RESULT
+            st.markdown("### 🤖 AI Security Analysis")
+            st.write(f"**Status:** {ai_status}")
+            if issues:
+                for i in issues:
+                    st.write(f"⚠️ {i}")
+            else:
+                st.write("No major issues detected")
 
         except:
             st.error("⚠️ Error occurred")
