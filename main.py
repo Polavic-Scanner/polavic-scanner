@@ -16,33 +16,21 @@ c = conn.cursor()
 c.execute("CREATE TABLE IF NOT EXISTS scans(domain TEXT, result TEXT, time TEXT)")
 conn.commit()
 
-# ================= Background Theme =================
-st.markdown(
-"""
-<div style="
-background-image: url('https://images.unsplash.com/photo-1622552288394-d61d2a5e3825?auto=format&fit=crop&w=1950&q=80');
-background-size: cover;
-background-position: center;
-position: fixed;
-top: 0;
-left: 0;
-width: 100%;
-height: 100%;
-filter: brightness(0.3);
-z-index: -1;">
-</div>
-""",
-unsafe_allow_html=True
-)
-
-# ================= CSS =================
+# ================= Live Cyber Background =================
 st.markdown("""
 <style>
-.stApp {
+body, .stApp {
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    background-size: 400% 400%;
+    animation: gradientBG 15s ease infinite;
     color: #00ffcc;
     font-family: monospace;
 }
-
+@keyframes gradientBG {
+    0%{background-position:0% 50%}
+    50%{background-position:100% 50%}
+    100%{background-position:0% 50%}
+}
 .card {
     background: rgba(0,255,204,0.15);
     border:1px solid #00ffcc;
@@ -56,13 +44,11 @@ st.markdown("""
     transform:scale(1.07);
     box-shadow:0 0 40px #00ffcc;
 }
-
 .row {
     display:flex;
     justify-content:space-around;
     flex-wrap:wrap;
 }
-
 .stButton>button {
     background-color:#00ffcc;
     color:black;
@@ -88,7 +74,6 @@ def scan(domain):
     except:
         ip = "Unknown"
         api = {}
-    
     try:
         res = requests.get(f"http://{domain}", timeout=3)
         status_code = res.status_code
@@ -141,7 +126,6 @@ def risk_score(data):
 if menu == "Scan":
     domain = st.text_input("🌐 Enter Domain")
     if st.button("🚀 Scan"):
-
         if not valid_domain(domain):
             st.error("Invalid domain")
         else:
