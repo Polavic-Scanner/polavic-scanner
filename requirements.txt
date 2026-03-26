@@ -1,5 +1,4 @@
 streamlit 
 requests
-matplotlib
 beautifulsoup4
 fpdf
