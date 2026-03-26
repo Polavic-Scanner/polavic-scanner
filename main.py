@@ -1,56 +1,85 @@
 import streamlit as st
-import sqlite3
-import hashlib
 import socket
 import requests
 import ssl
-from datetime import datetime
-from openai import OpenAI
-from reportlab.platypus import SimpleDocTemplate, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
+import time
 
-# ================= DB =================
-conn = sqlite3.connect("app.db", check_same_thread=False)
-c = conn.cursor()
+st.set_page_config(layout="wide")
 
-c.execute("CREATE TABLE IF NOT EXISTS users(username TEXT, password TEXT)")
-c.execute("CREATE TABLE IF NOT EXISTS scans(username TEXT, domain TEXT, result TEXT, time TEXT)")
-conn.commit()
+# ================= UI STYLE =================
+st.markdown("""
+<style>
 
-# ================= AUTH =================
-def hash_pass(p):
-    return hashlib.sha256(p.encode()).hexdigest()
+/* 🔥 BACKGROUND */
+.stApp {
+    background: radial-gradient(circle at top, #0f0f0f, #000000);
+    color: #00ffcc;
+    font-family: monospace;
+}
 
-def signup_user(u,p):
-    c.execute("INSERT INTO users VALUES (?,?)",(u,hash_pass(p)))
-    conn.commit()
+/* 🌟 TITLE */
+h1 {
+    text-align: center;
+    color: #00ffcc;
+    text-shadow: 0 0 20px #00ffcc;
+}
 
-def login_user(u,p):
-    c.execute("SELECT * FROM users WHERE username=? AND password=?",(u,hash_pass(p)))
-    return c.fetchone()
+/* 📦 CARD STYLE */
+.card {
+    background: rgba(0, 255, 204, 0.05);
+    border: 1px solid rgba(0,255,204,0.2);
+    backdrop-filter: blur(10px);
+    border-radius: 20px;
+    padding: 20px;
+    margin: 15px;
+    text-align: center;
+    box-shadow: 0 0 15px rgba(0,255,204,0.2);
+    transition: 0.3s;
+}
 
-# ================= AI =================
-def ai_analysis(text):
-    try:
-        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+/* ✨ HOVER GLOW */
+.card:hover {
+    transform: translateY(-10px) scale(1.05);
+    box-shadow: 0 0 40px #00ffcc;
+}
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role":"system","content":"You are a cybersecurity expert."},
-                {"role":"user","content":f"Analyze this scan data and give risks:\n{text}"}
-            ],
-            max_tokens=200
-        )
+/* 📊 GRID */
+.row {
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+}
 
-        return response.choices[0].message.content
+/* 🧠 INPUT */
+input {
+    background: black !important;
+    color: #00ffcc !important;
+}
 
-    except Exception as e:
-        return f"AI Error: {str(e)}"
+/* 🔘 BUTTON */
+.stButton>button {
+    background: black;
+    color: #00ffcc;
+    border: 1px solid #00ffcc;
+    border-radius: 10px;
+    transition: 0.3s;
+}
+.stButton>button:hover {
+    background: #00ffcc;
+    color: black;
+    box-shadow: 0 0 20px #00ffcc;
+}
 
-# ================= SCAN =================
+</style>
+""", unsafe_allow_html=True)
+
+# ================= TITLE =================
+st.title("🛡️ POLAVIC CYBER SCANNER")
+
+# ================= SCAN FUNCTION =================
 def scan(domain):
     ip = socket.gethostbyname(domain)
+
     api = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
     res = requests.get(f"http://{domain}", timeout=5)
 
@@ -64,126 +93,68 @@ def scan(domain):
         ssl_status = "Not Secure"
 
     return {
-        "ip":ip,
-        "city":api.get("city"),
-        "country":api.get("country"),
-        "isp":api.get("isp"),
-        "status":res.status_code,
-        "ssl":ssl_status
+        "ip": ip,
+        "city": api.get("city"),
+        "country": api.get("country"),
+        "isp": api.get("isp"),
+        "status": res.status_code,
+        "ssl": ssl_status
     }
 
-# ================= PDF =================
-def make_pdf(text):
-    file = "report.pdf"
-    doc = SimpleDocTemplate(file)
-    styles = getSampleStyleSheet()
-    story = [Paragraph(text, styles["Normal"])]
-    doc.build(story)
-    return file
-
 # ================= UI =================
-st.set_page_config(layout="wide")
+domain = st.text_input("🌐 Enter Target Domain")
 
-# 🎨 BACKGROUND (NO VIDEO BUG)
-st.markdown("""
-<style>
-.stApp {
-    background: linear-gradient(-45deg, #000000, #0a0a0a, #111111, #1a0000);
-    background-size: 400% 400%;
-    animation: bg 10s ease infinite;
-    color: white;
-}
-@keyframes bg {
-    0% {background-position:0% 50%;}
-    50% {background-position:100% 50%;}
-    100% {background-position:0% 50%;}
-}
-</style>
-""", unsafe_allow_html=True)
+if st.button("🚀 Scan Target"):
+    if domain:
 
-# ================= LOGIN SYSTEM =================
-if "user" not in st.session_state:
-    st.session_state.user = None
-
-menu = st.sidebar.radio("Menu", ["Login","Signup"])
-
-if st.session_state.user is None:
-
-    if menu=="Signup":
-        st.subheader("Signup")
-        u = st.text_input("Username", key="su")
-        p = st.text_input("Password", type="password", key="sp")
-
-        if st.button("Create Account"):
-            if u and p:
-                signup_user(u,p)
-                st.success("Account created ✅")
-            else:
-                st.error("Enter details")
-
-    if menu=="Login":
-        st.subheader("Login")
-        u = st.text_input("Username", key="lu")
-        p = st.text_input("Password", type="password", key="lp")
-
-        if st.button("Login"):
-            if login_user(u,p):
-                st.session_state.user = u
-                st.success("Logged in ✅")
-                st.rerun()
-            else:
-                st.error("Wrong credentials ❌")
-
-# ================= DASHBOARD =================
-if st.session_state.user:
-
-    st.sidebar.write(f"👤 {st.session_state.user}")
-    page = st.sidebar.radio("Dashboard", ["Scan","History","Admin"])
-
-    st.title("🛡️ POLAVIC DASHBOARD")
-
-    # ===== SCAN =====
-    if page=="Scan":
-        domain = st.text_input("Enter domain")
-
-        if st.button("Scan"):
+        with st.spinner("Scanning target..."):
+            time.sleep(1)
             try:
                 data = scan(domain)
-                st.json(data)
 
-                ai = ai_analysis(str(data))
-                st.subheader("🤖 AI Analysis")
-                st.write(ai)
+                # ===== CARDS UI =====
+                st.markdown(f"""
+                <div class="row">
 
-                c.execute("INSERT INTO scans VALUES (?,?,?,?)",
-                          (st.session_state.user,domain,str(data),str(datetime.now())))
-                conn.commit()
+                <div class="card">
+                <h3>🌐 IP Address</h3>
+                <p>{data['ip']}</p>
+                </div>
 
-                pdf_file = make_pdf(str(data) + "\n\nAI:\n" + ai)
-                with open(pdf_file, "rb") as f:
-                    st.download_button("Download PDF", f, file_name="report.pdf")
+                <div class="card">
+                <h3>🏙️ City</h3>
+                <p>{data['city']}</p>
+                </div>
+
+                <div class="card">
+                <h3>🌍 Country</h3>
+                <p>{data['country']}</p>
+                </div>
+
+                </div>
+
+                <div class="row">
+
+                <div class="card">
+                <h3>📡 ISP</h3>
+                <p>{data['isp']}</p>
+                </div>
+
+                <div class="card">
+                <h3>📶 Status Code</h3>
+                <p>{data['status']}</p>
+                </div>
+
+                <div class="card">
+                <h3>🔐 SSL Security</h3>
+                <p>{data['ssl']}</p>
+                </div>
+
+                </div>
+                """, unsafe_allow_html=True)
 
             except Exception as e:
-                st.error(f"Scan Error: {e}")
+                st.error(f"❌ Error: {e}")
 
-    # ===== HISTORY =====
-    elif page=="History":
-        c.execute("SELECT * FROM scans WHERE username=?", (st.session_state.user,))
-        rows = c.fetchall()
-        for r in rows:
-            st.write(r)
-
-    # ===== ADMIN =====
-    elif page=="Admin":
-        if st.session_state.user != "admin":
-            st.error("Access denied ❌")
-        else:
-            st.subheader("👑 Admin Panel")
-
-            st.write("Users:")
-            c.execute("SELECT username FROM users")
-            st.write(c.fetchall())
-
-            st.write("All Scans:")
-            c.execute("SELECT * FROM scans")
-            st.write(c.fetchall())
+    else:
+        st.warning("⚠️ Enter a domain first")
