@@ -8,7 +8,7 @@ import sqlite3
 import matplotlib.pyplot as plt
 from openai import OpenAI
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", page_title="POLAVIC CYBER AI DASHBOARD")
 
 # ================= DB =================
 conn = sqlite3.connect("data.db", check_same_thread=False)
@@ -16,31 +16,41 @@ c = conn.cursor()
 c.execute("CREATE TABLE IF NOT EXISTS scans(domain TEXT, result TEXT, time TEXT)")
 conn.commit()
 
-# ================= UI =================
+# ================= STYLING =================
 st.markdown("""
 <style>
 .stApp {
-    background: radial-gradient(circle at center, #050505, #000000);
+    background-image: url("https://images.unsplash.com/photo-1612831455542-2f5c7c446a05");
+    background-size: cover;
+    background-attachment: fixed;
     color: #00ffcc;
     font-family: monospace;
 }
+
 .card {
-    background: rgba(0,255,204,0.05);
+    background: rgba(0,255,204,0.1);
     border:1px solid #00ffcc;
     border-radius:15px;
     padding:20px;
     margin:10px;
     text-align:center;
-    transition:0.3s;
+    transition: transform 0.3s, box-shadow 0.3s;
 }
 .card:hover {
     transform:scale(1.07);
     box-shadow:0 0 40px #00ffcc;
 }
+
 .row {
     display:flex;
     justify-content:space-around;
     flex-wrap:wrap;
+}
+
+.stButton>button {
+    background-color:#00ffcc;
+    color:black;
+    font-weight:bold;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -58,12 +68,17 @@ def valid_domain(domain):
 def scan(domain):
     ip = socket.gethostbyname(domain)
     api = requests.get(f"http://ip-api.com/json/{ip}").json()
-    res = requests.get(f"http://{domain}")
+    try:
+        res = requests.get(f"http://{domain}", timeout=3)
+        status_code = res.status_code
+    except:
+        status_code = "No Response"
 
     ssl_status = "Secure"
     try:
         ctx = ssl.create_default_context()
         with ctx.wrap_socket(socket.socket(), server_hostname=domain) as s:
+            s.settimeout(3)
             s.connect((domain,443))
     except:
         ssl_status = "Not Secure"
@@ -73,7 +88,7 @@ def scan(domain):
         "city": api.get("city"),
         "country": api.get("country"),
         "isp": api.get("isp"),
-        "status": res.status_code,
+        "status": status_code,
         "ssl": ssl_status
     }
 
@@ -103,7 +118,6 @@ def risk_score(data):
 
 # ================= SCAN PAGE =================
 if menu == "Scan":
-
     domain = st.text_input("🌐 Enter Domain")
 
     if st.button("🚀 Scan"):
@@ -111,11 +125,12 @@ if menu == "Scan":
         if not valid_domain(domain):
             st.error("Invalid domain")
         else:
-
-            terminal = st.empty()
-            for txt in ["Connecting...", "Scanning...", "Analyzing..."]:
-                terminal.text(txt)
-                time.sleep(0.4)
+            with st.spinner("Connecting..."):
+                time.sleep(0.5)
+            with st.spinner("Scanning..."):
+                time.sleep(0.5)
+            with st.spinner("Analyzing..."):
+                time.sleep(0.5)
 
             data = scan(domain)
 
@@ -139,51 +154,48 @@ if menu == "Scan":
 
             # Risk
             score = risk_score(data)
+            st.subheader("⚠️ Risk Score")
             st.progress(score)
 
             # Chart
             fig, ax = plt.subplots()
-            fig.patch.set_facecolor('black')
-            ax.set_facecolor('black')
-            ax.bar(["Risk"], [score])
+            fig.patch.set_facecolor('#00000000')
+            ax.set_facecolor('#00000000')
+            ax.bar(["Risk"], [score], color='#00ffcc')
             ax.tick_params(colors='#00ffcc')
             st.pyplot(fig)
 
             # AI
-            st.subheader("🤖 AI")
+            st.subheader("🤖 AI Analysis")
             st.write(ai_analysis(data))
 
 # ================= HISTORY =================
 elif menu == "History":
-
     st.subheader("📜 Scan History")
-
     c.execute("SELECT * FROM scans ORDER BY time DESC")
     rows = c.fetchall()
-
     for r in rows:
         st.write(r)
 
     if st.button("🗑️ Clear History"):
         c.execute("DELETE FROM scans")
         conn.commit()
-        st.success("Cleared")
+        st.success("History Cleared")
 
 # ================= DASHBOARD =================
 elif menu == "Dashboard":
-
     st.subheader("📊 Overview")
-
     c.execute("SELECT COUNT(*) FROM scans")
     total = c.fetchone()[0]
-
     st.metric("Total Scans", total)
 
-    # Chart
+    # Timeline Chart
     c.execute("SELECT time FROM scans")
     data = c.fetchall()
-
     if data:
         fig, ax = plt.subplots()
-        ax.plot(range(len(data)))
+        ax.set_facecolor('#00000000')
+        fig.patch.set_facecolor('#00000000')
+        ax.plot(range(len(data)), color='#00ffcc', marker='o')
+        ax.tick_params(colors='#00ffcc')
         st.pyplot(fig)
