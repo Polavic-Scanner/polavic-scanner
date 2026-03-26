@@ -15,14 +15,23 @@ st.set_page_config(layout="wide")
 st.markdown("""
 <style>
 .stApp {
-    background: black;
+    background: radial-gradient(circle at center, #050505, #000000);
     color: #00ffcc;
     font-family: monospace;
 }
+
+/* Glow Animation */
+@keyframes glow {
+    0% {box-shadow: 0 0 5px #00ffcc;}
+    50% {box-shadow: 0 0 25px #00ffcc;}
+    100% {box-shadow: 0 0 5px #00ffcc;}
+}
+
 h1 {
     text-align:center;
     text-shadow:0 0 20px #00ffcc;
 }
+
 .card {
     background: rgba(0,255,204,0.05);
     border:1px solid #00ffcc;
@@ -31,17 +40,33 @@ h1 {
     margin:10px;
     text-align:center;
     transition:0.3s;
+    animation: glow 3s infinite;
 }
+
 .card:hover {
-    transform:scale(1.05);
-    box-shadow:0 0 40px #00ffcc;
+    transform:scale(1.07);
 }
+
 .row {
     display:flex;
     justify-content:space-around;
     flex-wrap:wrap;
 }
 </style>
+""", unsafe_allow_html=True)
+
+# Matrix background
+st.markdown("""
+<div style="position:fixed;top:0;left:0;width:100%;height:100%;
+background: repeating-linear-gradient(
+    0deg,
+    rgba(0,255,204,0.05) 0px,
+    rgba(0,255,204,0.05) 1px,
+    transparent 1px,
+    transparent 2px
+);
+z-index:-1;">
+</div>
 """, unsafe_allow_html=True)
 
 st.title("🛡️ POLAVIC CYBER AI SCANNER")
@@ -102,9 +127,9 @@ def risk_score(data):
 
 # ================= PDF =================
 def make_pdf(text):
-    file="report.pdf"
-    doc=SimpleDocTemplate(file)
-    styles=getSampleStyleSheet()
+    file = "report.pdf"
+    doc = SimpleDocTemplate(file)
+    styles = getSampleStyleSheet()
     doc.build([Paragraph(text, styles["Normal"])])
     return file
 
@@ -117,13 +142,13 @@ if st.button("🚀 Scan"):
         st.error("❌ Invalid domain format")
 
     else:
-        # ===== Loading =====
+        # Loading bar
         progress = st.progress(0)
         for i in range(100):
             time.sleep(0.01)
             progress.progress(i+1)
 
-        # ===== Terminal Effect =====
+        # Terminal effect
         terminal = st.empty()
         logs = ["Connecting...", "Fetching IP...", "Checking SSL...", "Analyzing..."]
         for log in logs:
@@ -133,7 +158,7 @@ if st.button("🚀 Scan"):
         try:
             data = scan(domain)
 
-            # ===== CARDS =====
+            # CARDS
             st.markdown(f"""
             <div class="row">
             <div class="card"><h3>🌐 IP</h3><p>{data['ip']}</p></div>
@@ -147,7 +172,7 @@ if st.button("🚀 Scan"):
             </div>
             """, unsafe_allow_html=True)
 
-            # ===== Risk =====
+            # Risk Score
             score = risk_score(data)
             st.subheader("⚠️ Risk Score")
             st.progress(score)
@@ -159,17 +184,25 @@ if st.button("🚀 Scan"):
             else:
                 st.error("🔴 High Risk")
 
-            # ===== Chart =====
+            # GRAPH (FIXED DARK)
             fig, ax = plt.subplots()
+            fig.patch.set_facecolor('black')
+            ax.set_facecolor('black')
+
             ax.bar(["Risk"], [score])
+
+            ax.tick_params(colors='#00ffcc')
+            ax.spines['bottom'].set_color('#00ffcc')
+            ax.spines['left'].set_color('#00ffcc')
+
             st.pyplot(fig)
 
-            # ===== AI =====
+            # AI
             st.subheader("🤖 AI Analysis")
             ai = ai_analysis(data)
             st.write(ai)
 
-            # ===== PDF =====
+            # PDF
             pdf = make_pdf(str(data)+"\n\n"+ai)
             with open(pdf,"rb") as f:
                 st.download_button("📄 Download Report", f, file_name="report.pdf")
