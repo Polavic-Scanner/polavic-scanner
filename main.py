@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 from fpdf import FPDF
 from openai import OpenAI
 
-st.set_page_config(layout="wide", page_title="POLAVIC CYBER AI PRO")
+st.set_page_config(layout="wide", page_title="POLAVIC CYBER AI")
 
 # ===== DATABASE =====
 conn = sqlite3.connect("data.db", check_same_thread=False)
