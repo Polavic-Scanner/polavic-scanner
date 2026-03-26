@@ -1,252 +1,148 @@
 import streamlit as st
+import sqlite3
+import hashlib
 import socket
 import requests
-import time
-from datetime import datetime
-import re
 import ssl
-import whois
+from datetime import datetime
+from openai import OpenAI
 
-# PAGE CONFIG
-st.set_page_config(page_title="POLAVIC", page_icon="🛡️", layout="centered")
+# ================= DB =================
+conn = sqlite3.connect("users.db", check_same_thread=False)
+c = conn.cursor()
 
-# 🌌 FULL UI (3D BACKGROUND + ANIMATION)
-st.markdown("""
-<style>
+c.execute("""CREATE TABLE IF NOT EXISTS users(
+    username TEXT,
+    password TEXT
+)""")
 
-/* BACKGROUND */
-.stApp {
-    background: linear-gradient(135deg, #000000, #0a0a0a, #111111);
-    background-size: 400% 400%;
-    animation: bgMove 12s ease infinite;
-    color: white;
-}
+c.execute("""CREATE TABLE IF NOT EXISTS scans(
+    username TEXT,
+    domain TEXT,
+    result TEXT,
+    time TEXT
+)""")
+conn.commit()
 
-/* MOVING BG */
-@keyframes bgMove {
-    0% {background-position: 0% 50%;}
-    50% {background-position: 100% 50%;}
-    100% {background-position: 0% 50%;}
-}
+# ================= AUTH =================
+def hash_pass(p):
+    return hashlib.sha256(p.encode()).hexdigest()
 
-/* GLOW ORBS */
-.stApp::before {
-    content: "";
-    position: fixed;
-    width: 500px;
-    height: 500px;
-    background: radial-gradient(circle, rgba(255,0,0,0.2), transparent);
-    top: 20%;
-    left: 10%;
-    filter: blur(120px);
-    z-index: -1;
-}
+def login_user(u,p):
+    c.execute("SELECT * FROM users WHERE username=? AND password=?", (u, hash_pass(p)))
+    return c.fetchone()
 
-.stApp::after {
-    content: "";
-    position: fixed;
-    width: 400px;
-    height: 400px;
-    background: radial-gradient(circle, rgba(255,0,0,0.15), transparent);
-    bottom: 10%;
-    right: 10%;
-    filter: blur(100px);
-    z-index: -1;
-}
+def signup_user(u,p):
+    c.execute("INSERT INTO users VALUES (?,?)",(u,hash_pass(p)))
+    conn.commit()
 
-/* LOGO */
-.logo {
-    text-align:center;
-    font-size:48px;
-    letter-spacing:10px;
-    font-weight:bold;
-    animation: float 3s ease-in-out infinite;
-    text-shadow:0 0 20px red;
-}
-@keyframes float {
-    0% {transform: translateY(0);}
-    50% {transform: translateY(-10px);}
-    100% {transform: translateY(0);}
-}
+# ================= AI =================
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-/* CARD */
-.box {
-    background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(15px);
-    padding:20px;
-    border-radius:15px;
-    border:1px solid rgba(255,0,0,0.3);
-    box-shadow:0 10px 40px rgba(255,0,0,0.25);
-    margin-top:20px;
-    transition:0.3s;
-}
-.box:hover {
-    transform: scale(1.02);
-}
+def ai_analysis(text):
+    try:
+        res = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role":"user","content":f"Analyze this scan:\n{text}"}]
+        )
+        return res.choices[0].message.content
+    except:
+        return "AI Error"
 
-/* BUTTON */
-.stButton>button {
-    background: linear-gradient(135deg, red, darkred);
-    border-radius:10px;
-    height:45px;
-    font-weight:bold;
-    color:white;
-}
+# ================= SCAN =================
+def scan(domain):
+    ip = socket.gethostbyname(domain)
+    api = requests.get(f"http://ip-api.com/json/{ip}").json()
+    res = requests.get(f"http://{domain}")
 
-/* INPUT */
-.stTextInput input {
-    background: rgba(255,255,255,0.05);
-    border:1px solid rgba(255,0,0,0.3);
-    border-radius:10px;
-    color:white;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# LOGO
-st.markdown('<div class="logo">🛡️ POLAVIC</div>', unsafe_allow_html=True)
-
-# VALIDATION
-def is_valid_domain(domain):
-    return re.match(r"^(?!:\/\/)([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$", domain)
-
-# SSL
-def check_ssl(domain):
+    ssl_status = "Secure"
     try:
         ctx = ssl.create_default_context()
         with ctx.wrap_socket(socket.socket(), server_hostname=domain) as s:
-            s.settimeout(3)
-            s.connect((domain, 443))
-            return "Secure ✅"
+            s.connect((domain,443))
     except:
-        return "Not Secure ❌"
+        ssl_status = "Not Secure"
 
-# PORT SCAN
-def scan_ports(domain):
-    ports = [21,22,80,443,8080]
-    open_ports = []
-    for p in ports:
-        try:
-            s = socket.socket()
-            s.settimeout(1)
-            s.connect((domain,p))
-            open_ports.append(p)
-            s.close()
-        except:
-            pass
-    return open_ports if open_ports else ["None"]
+    return {
+        "ip":ip,
+        "city":api.get("city"),
+        "country":api.get("country"),
+        "isp":api.get("isp"),
+        "status":res.status_code,
+        "ssl":ssl_status
+    }
 
-# WHOIS
-def get_whois(domain):
-    try:
-        return whois.whois(domain).org or "Hidden"
-    except:
-        return "Unavailable"
+# ================= UI =================
+st.set_page_config(layout="wide")
 
-# SUBDOMAIN
-def subdomain_scan(domain):
-    subs = ["www","mail","ftp","dev","test"]
-    found = []
-    for s in subs:
-        try:
-            socket.gethostbyname(f"{s}.{domain}")
-            found.append(f"{s}.{domain}")
-        except:
-            pass
-    return found if found else ["None"]
+# 🎥 VIDEO BACKGROUND
+st.markdown("""
+<style>
+video {
+position: fixed;
+right: 0;
+bottom: 0;
+min-width: 100%;
+min-height: 100%;
+z-index: -1;
+opacity:0.2;
+}
+</style>
 
-# AI LOGIC
-def ai_analysis(ssl_status, ports, response_code):
-    score = 0
-    issues = []
+<video autoplay muted loop>
+<source src="https://www.w3schools.com/howto/rain.mp4" type="video/mp4">
+</video>
+""", unsafe_allow_html=True)
 
-    if "Not Secure" in ssl_status:
-        score -= 2
-        issues.append("No SSL encryption")
+# ================= LOGIN =================
+menu = st.sidebar.selectbox("Menu", ["Login","Signup"])
 
-    if 21 in ports or 22 in ports:
-        score -= 1
-        issues.append("Sensitive ports open")
+if "user" not in st.session_state:
+    st.session_state.user = None
 
-    if response_code != 200:
-        score -= 1
-        issues.append("Site not stable")
+if menu=="Signup":
+    u = st.text_input("Username")
+    p = st.text_input("Password", type="password")
+    if st.button("Signup"):
+        signup_user(u,p)
+        st.success("Account created")
 
-    if score >= 0:
-        return "🟢 Safe", issues
-    elif score == -1:
-        return "🟡 Medium Risk", issues
-    else:
-        return "🔴 Risky", issues
+elif menu=="Login":
+    u = st.text_input("Username")
+    p = st.text_input("Password", type="password")
+    if st.button("Login"):
+        if login_user(u,p):
+            st.session_state.user = u
+            st.success("Logged in")
+        else:
+            st.error("Wrong credentials")
 
-# FORM
-with st.form("scan"):
-    url = st.text_input("", placeholder="Enter domain (example.com)")
-    submit = st.form_submit_button("RUN FULL SCAN")
+# ================= DASHBOARD =================
+if st.session_state.user:
 
-if submit:
-    if not is_valid_domain(url):
-        st.error("Invalid domain ❌")
-    else:
-        progress = st.progress(0)
-        for i in range(100):
-            time.sleep(0.01)
-            progress.progress(i+1)
+    page = st.sidebar.radio("Dashboard", ["Scan","History"])
 
-        try:
-            start = time.time()
+    st.title("🛡️ POLAVIC DASHBOARD")
 
-            ip = socket.gethostbyname(url)
-            api = requests.get(f"http://ip-api.com/json/{ip}", timeout=5).json()
-            res = requests.get(f"http://{url}", timeout=5)
+    if page=="Scan":
+        domain = st.text_input("Enter domain")
 
-            load = round((time.time()-start)*1000,2)
+        if st.button("Scan"):
+            data = scan(domain)
 
-            ssl_status = check_ssl(url)
-            ports = scan_ports(url)
-            owner = get_whois(url)
-            subs = subdomain_scan(url)
+            st.json(data)
 
-            ai_status, issues = ai_analysis(ssl_status, ports, res.status_code)
+            ai = ai_analysis(str(data))
+            st.write("🤖 AI Analysis")
+            st.write(ai)
 
-            st.success("Scan Complete ✅")
+            c.execute("INSERT INTO scans VALUES (?,?,?,?)",
+                      (st.session_state.user,domain,str(data),str(datetime.now())))
+            conn.commit()
 
-            st.metric("Speed", f"{load} ms")
-            st.metric("SSL", ssl_status)
-            st.metric("Ports", str(ports))
+    elif page=="History":
+        c.execute("SELECT * FROM scans WHERE username=?", (st.session_state.user,))
+        rows = c.fetchall()
 
-            # 💎 3D CARD
-            st.markdown(f"""
-            <div class="box">
-            <h3 style="text-align:center;color:#ff4d4d;">🌐 TARGET DETAILS</h3>
-            <hr>
-
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                <div><b>Domain</b><br>{url}</div>
-                <div><b>IP</b><br>{ip}</div>
-                <div><b>City</b><br>{api.get('city')}</div>
-                <div><b>Country</b><br>{api.get('country')}</div>
-                <div><b>ISP</b><br>{api.get('isp')}</div>
-                <div><b>Owner</b><br>{owner}</div>
-                <div><b>Server</b><br>{res.headers.get('Server')}</div>
-                <div><b>Status</b><br>{res.status_code}</div>
-            </div>
-
-            <div style="text-align:center;margin-top:10px;font-size:12px;">
-            {datetime.now()}
-            </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.markdown("### 🔎 Subdomains")
-            for s in subs:
-                st.write(s)
-
-            st.markdown("### 🤖 AI Analysis")
-            st.write(ai_status)
-            for i in issues:
-                st.write("⚠️", i)
-
-        except:
-            st.error("Error occurred ⚠️")
+        for r in rows:
+            st.write(r)
