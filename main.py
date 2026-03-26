@@ -10,19 +10,55 @@ import whois
 # PAGE CONFIG
 st.set_page_config(page_title="POLAVIC", page_icon="🛡️", layout="centered")
 
-# 🌌 3D + ANIMATION UI
+# 🌌 FULL UI (3D BACKGROUND + ANIMATION)
 st.markdown("""
 <style>
+
+/* BACKGROUND */
 .stApp {
-    background: radial-gradient(circle at 20% 20%, #0f0f0f, #000000);
+    background: linear-gradient(135deg, #000000, #0a0a0a, #111111);
+    background-size: 400% 400%;
+    animation: bgMove 12s ease infinite;
     color: white;
 }
 
+/* MOVING BG */
+@keyframes bgMove {
+    0% {background-position: 0% 50%;}
+    50% {background-position: 100% 50%;}
+    100% {background-position: 0% 50%;}
+}
+
+/* GLOW ORBS */
+.stApp::before {
+    content: "";
+    position: fixed;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(255,0,0,0.2), transparent);
+    top: 20%;
+    left: 10%;
+    filter: blur(120px);
+    z-index: -1;
+}
+
+.stApp::after {
+    content: "";
+    position: fixed;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(255,0,0,0.15), transparent);
+    bottom: 10%;
+    right: 10%;
+    filter: blur(100px);
+    z-index: -1;
+}
+
 /* LOGO */
-.logo-text {
+.logo {
     text-align:center;
     font-size:48px;
-    letter-spacing:12px;
+    letter-spacing:10px;
     font-weight:bold;
     animation: float 3s ease-in-out infinite;
     text-shadow:0 0 20px red;
@@ -33,39 +69,19 @@ st.markdown("""
     100% {transform: translateY(0);}
 }
 
-/* SCAN LINE */
-.scan-line {
-    height:2px;
-    background: linear-gradient(90deg, transparent, red, transparent);
-    animation: scan 2s infinite;
-}
-@keyframes scan {
-    0% {transform: translateX(-100%);}
-    100% {transform: translateX(100%);}
-}
-
 /* CARD */
 .box {
     background: rgba(255,255,255,0.05);
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(15px);
     padding:20px;
     border-radius:15px;
     border:1px solid rgba(255,0,0,0.3);
-    box-shadow:0 10px 30px rgba(255,0,0,0.3);
+    box-shadow:0 10px 40px rgba(255,0,0,0.25);
     margin-top:20px;
     transition:0.3s;
 }
 .box:hover {
     transform: scale(1.02);
-}
-
-/* FADE */
-.fade-in {
-    animation: fadeIn 1s ease-in;
-}
-@keyframes fadeIn {
-    from {opacity:0; transform:translateY(20px);}
-    to {opacity:1; transform:translateY(0);}
 }
 
 /* BUTTON */
@@ -84,12 +100,12 @@ st.markdown("""
     border-radius:10px;
     color:white;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
 # LOGO
-st.markdown('<div class="logo-text">🛡️ POLAVIC</div>', unsafe_allow_html=True)
-st.markdown('<div class="scan-line"></div>', unsafe_allow_html=True)
+st.markdown('<div class="logo">🛡️ POLAVIC</div>', unsafe_allow_html=True)
 
 # VALIDATION
 def is_valid_domain(domain):
@@ -140,7 +156,7 @@ def subdomain_scan(domain):
             pass
     return found if found else ["None"]
 
-# 🤖 AI ANALYSIS (SMART LOGIC)
+# AI LOGIC
 def ai_analysis(ssl_status, ports, response_code):
     score = 0
     issues = []
@@ -155,16 +171,14 @@ def ai_analysis(ssl_status, ports, response_code):
 
     if response_code != 200:
         score -= 1
-        issues.append("Website not stable")
+        issues.append("Site not stable")
 
     if score >= 0:
-        status = "🟢 Safe"
+        return "🟢 Safe", issues
     elif score == -1:
-        status = "🟡 Medium Risk"
+        return "🟡 Medium Risk", issues
     else:
-        status = "🔴 Risky"
-
-    return status, issues
+        return "🔴 Risky", issues
 
 # FORM
 with st.form("scan"):
@@ -173,7 +187,7 @@ with st.form("scan"):
 
 if submit:
     if not is_valid_domain(url):
-        st.error("❌ Invalid domain")
+        st.error("Invalid domain ❌")
     else:
         progress = st.progress(0)
         for i in range(100):
@@ -196,43 +210,43 @@ if submit:
 
             ai_status, issues = ai_analysis(ssl_status, ports, res.status_code)
 
-            st.success("✅ SCAN COMPLETE")
+            st.success("Scan Complete ✅")
 
-            c1,c2,c3 = st.columns(3)
-            c1.metric("⚡ Speed", f"{load} ms")
-            c2.metric("🔐 SSL", ssl_status)
-            c3.metric("🌐 Ports", str(ports))
+            st.metric("Speed", f"{load} ms")
+            st.metric("SSL", ssl_status)
+            st.metric("Ports", str(ports))
 
+            # 💎 3D CARD
             st.markdown(f"""
-            <div class="box fade-in">
-            <b>Target:</b> {url}<br>
-            <b>IP:</b> {ip}<br>
-            <b>City:</b> {api.get('city','N/A')}<br>
-            <b>Country:</b> {api.get('country','N/A')}<br>
-            <b>ISP:</b> {api.get('isp','N/A')}<br>
-            <b>Owner:</b> {owner}<br>
-            <b>Server:</b> {res.headers.get('Server','Hidden')}<br>
-            <b>Status:</b> {res.status_code}<br>
-            <b>Time:</b> {datetime.now()}
+            <div class="box">
+            <h3 style="text-align:center;color:#ff4d4d;">🌐 TARGET DETAILS</h3>
+            <hr>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div><b>Domain</b><br>{url}</div>
+                <div><b>IP</b><br>{ip}</div>
+                <div><b>City</b><br>{api.get('city')}</div>
+                <div><b>Country</b><br>{api.get('country')}</div>
+                <div><b>ISP</b><br>{api.get('isp')}</div>
+                <div><b>Owner</b><br>{owner}</div>
+                <div><b>Server</b><br>{res.headers.get('Server')}</div>
+                <div><b>Status</b><br>{res.status_code}</div>
+            </div>
+
+            <div style="text-align:center;margin-top:10px;font-size:12px;">
+            {datetime.now()}
+            </div>
             </div>
             """, unsafe_allow_html=True)
 
-            # SUBDOMAINS
             st.markdown("### 🔎 Subdomains")
             for s in subs:
-                st.write(f"• {s}")
+                st.write(s)
 
-            # AI RESULT
-            st.markdown("### 🤖 AI Security Analysis")
-            st.write(f"**Status:** {ai_status}")
-            if issues:
-                for i in issues:
-                    st.write(f"⚠️ {i}")
-            else:
-                st.write("No major issues detected")
+            st.markdown("### 🤖 AI Analysis")
+            st.write(ai_status)
+            for i in issues:
+                st.write("⚠️", i)
 
         except:
-            st.error("⚠️ Error occurred")
-
-# FOOTER
-st.markdown('<div style="text-align:center;color:#444;font-size:10px;margin-top:60px;">POLAVIC INTELLIGENCE</div>', unsafe_allow_html=True)
+            st.error("Error occurred ⚠️")
