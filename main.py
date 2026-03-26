@@ -2,123 +2,138 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 from fpdf import FPDF
+import re
 
-# ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Cyber Scanner", layout="wide")
+st.set_page_config(page_title="POLAVIC Scanner", layout="centered")
 
-# ---------------- BACKGROUND ----------------
+# -------- CLEAN DARK UI --------
 st.markdown("""
 <style>
-body {
-    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-    color: white;
+.stApp {
+    background: #0a0a0a;
+    color: #00ffcc;
+    font-family: monospace;
 }
 
-.stApp {
-    background: url("https://media.giphy.com/media/3o7TKtnuHOHHUjR38Y/giphy.gif");
-    background-size: cover;
-    background-attachment: fixed;
+.title {
+    text-align: center;
+    font-size: 40px;
+    letter-spacing: 5px;
+    margin-bottom: 20px;
 }
 
 .card {
     padding: 15px;
-    margin: 10px;
-    border-radius: 12px;
-    background: rgba(0,0,0,0.6);
+    margin: 10px 0;
+    border-radius: 10px;
+    background: #111;
+    border: 1px solid #222;
     transition: 0.3s;
 }
 
 .card:hover {
-    transform: scale(1.03);
-    box-shadow: 0 0 20px cyan;
+    box-shadow: 0 0 20px #00ffcc;
+    transform: scale(1.02);
 }
 
+button {
+    width: 100%;
+    height: 45px;
+    background: #00ffcc !important;
+    color: black !important;
+    font-weight: bold;
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- TITLE ----------------
-st.title("💀 Hacker Style Website Scanner")
+st.markdown('<div class="title">⚡ POLAVIC SCANNER</div>', unsafe_allow_html=True)
 
-url = st.text_input("Enter Website URL")
+# -------- INPUT --------
+url = st.text_input("Enter Website (example: https://google.com)")
 
-# ---------------- FUNCTIONS ----------------
+# -------- FIX URL --------
+def fix_url(u):
+    if not u.startswith("http"):
+        u = "https://" + u
+    return u
+
+# -------- HEADER ANALYSIS --------
 def analyze_headers(headers):
     security_headers = {
-        "Content-Security-Policy": "Prevents XSS attacks",
-        "X-Frame-Options": "Prevents clickjacking",
-        "Strict-Transport-Security": "Forces HTTPS",
-        "X-Content-Type-Options": "Prevents MIME sniffing",
-        "Referrer-Policy": "Controls referrer data"
+        "Content-Security-Policy": "XSS protection",
+        "X-Frame-Options": "Clickjacking protection",
+        "Strict-Transport-Security": "HTTPS enforcement",
+        "X-Content-Type-Options": "MIME protection"
     }
 
     result = []
-
     for key, desc in security_headers.items():
         if key in headers:
-            result.append((key, "✅ Present", desc))
+            result.append((key, "SAFE ✅", desc))
         else:
-            result.append((key, "❌ Missing", desc))
-
+            result.append((key, "MISSING ❌", desc))
     return result
 
-
-def generate_pdf(url, headers_analysis):
+# -------- PDF --------
+def generate_pdf(url, analysis):
     pdf = FPDF()
     pdf.add_page()
-
     pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt="Cyber Report", ln=True)
 
+    pdf.cell(200, 10, txt="POLAVIC REPORT", ln=True)
     pdf.cell(200, 10, txt=f"URL: {url}", ln=True)
 
-    for h in headers_analysis:
+    for h in analysis:
         pdf.cell(200, 10, txt=f"{h[0]} - {h[1]}", ln=True)
 
     pdf.output("report.pdf")
 
+# -------- SCAN --------
+if st.button("SCAN NOW"):
 
-# ---------------- SCAN BUTTON ----------------
-if st.button("🚀 Scan Now"):
-    try:
-        response = requests.get(url)
-        headers = response.headers
+    if not url:
+        st.error("Enter URL first")
+    else:
+        url = fix_url(url)
 
-        st.success("Scan Completed ✅")
+        try:
+            with st.spinner("Scanning..."):
+                response = requests.get(url, timeout=5)
 
-        # -------- HEADERS UI --------
-        st.subheader("🛡️ Security Headers")
+            st.success("Scan Done ✅")
 
-        analysis = analyze_headers(headers)
-
-        for h in analysis:
-            color = "#00ffcc" if "Present" in h[1] else "#ff4b4b"
+            # -------- INFO --------
+            soup = BeautifulSoup(response.text, "html.parser")
+            title = soup.title.string if soup.title else "No title"
 
             st.markdown(f"""
-            <div class="card" style="border:1px solid {color}; box-shadow:0 0 15px {color};">
-                <h4 style="color:{color}">{h[0]}</h4>
-                <p>{h[1]}</p>
-                <small>{h[2]}</small>
+            <div class="card">
+                <h3>🌐 {title}</h3>
+                <p>Status: {response.status_code}</p>
             </div>
             """, unsafe_allow_html=True)
 
-        # -------- PAGE DATA --------
-        soup = BeautifulSoup(response.text, "html.parser")
-        title = soup.title.string if soup.title else "No title"
+            # -------- HEADERS --------
+            st.subheader("🛡️ Security Check")
 
-        st.subheader("🌐 Website Info")
+            analysis = analyze_headers(response.headers)
 
-        st.markdown(f"""
-        <div class="card">
-            <h3>Title: {title}</h3>
-            <p>Status Code: {response.status_code}</p>
-        </div>
-        """, unsafe_allow_html=True)
+            for h in analysis:
+                color = "#00ffcc" if "SAFE" in h[1] else "#ff4b4b"
 
-        # -------- PDF --------
-        if st.button("📄 Download Report"):
-            generate_pdf(url, analysis)
-            with open("report.pdf", "rb") as f:
-                st.download_button("Download PDF", f, file_name="report.pdf")
+                st.markdown(f"""
+                <div class="card" style="border:1px solid {color}">
+                    <b style="color:{color}">{h[0]}</b><br>
+                    {h[1]}<br>
+                    <small>{h[2]}</small>
+                </div>
+                """, unsafe_allow_html=True)
 
-    except:
-        st.error("Invalid URL or Site Down ❌")
+            # -------- PDF --------
+            if st.button("DOWNLOAD REPORT"):
+                generate_pdf(url, analysis)
+                with open("report.pdf", "rb") as f:
+                    st.download_button("Click to Download", f)
+
+        except:
+            st.error("Website not reachable ❌")
