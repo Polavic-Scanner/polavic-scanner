@@ -1,6 +1,5 @@
 streamlit 
 requests
 matplotlib
-reportlab
-openai
+beautifulsoup4
 fpdf
