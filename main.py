@@ -1,193 +1,124 @@
 import streamlit as st
-import socket
 import requests
-import ssl
-import time
-import re
-import sqlite3
-import matplotlib.pyplot as plt
 from bs4 import BeautifulSoup
+from fpdf import FPDF
 
-st.set_page_config(layout="wide")
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(page_title="Cyber Scanner", layout="wide")
 
-# ===== DATABASE =====
-conn = sqlite3.connect("data.db", check_same_thread=False)
-c = conn.cursor()
-c.execute("CREATE TABLE IF NOT EXISTS scans(domain TEXT, result TEXT, time TEXT)")
-conn.commit()
-
-# ===== UI STYLE =====
+# ---------------- BACKGROUND ----------------
 st.markdown("""
 <style>
-@keyframes bgmove {
-  0% {background-position:0%}
-  100% {background-position:100%}
+body {
+    background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    color: white;
 }
+
 .stApp {
-    background: linear-gradient(270deg,#000000,#001f1f,#000000);
-    background-size:400% 400%;
-    animation:bgmove 10s infinite alternate;
-    color:#00ffcc;
-    font-family:monospace;
+    background: url("https://media.giphy.com/media/3o7TKtnuHOHHUjR38Y/giphy.gif");
+    background-size: cover;
+    background-attachment: fixed;
 }
 
 .card {
-    background:rgba(0,255,204,0.08);
-    border:1px solid #00ffcc;
-    border-radius:15px;
-    padding:20px;
-    margin:10px;
-    text-align:center;
-    backdrop-filter:blur(10px);
-    transition:0.3s;
+    padding: 15px;
+    margin: 10px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.6);
+    transition: 0.3s;
 }
+
 .card:hover {
-    transform:scale(1.07);
-    box-shadow:0 0 30px #00ffcc;
+    transform: scale(1.03);
+    box-shadow: 0 0 20px cyan;
 }
-.row {
-    display:flex;
-    justify-content:space-around;
-    flex-wrap:wrap;
-}
+
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🛡️ CYBER AI PRO DASHBOARD")
+# ---------------- TITLE ----------------
+st.title("💀 Hacker Style Website Scanner")
 
-menu = st.sidebar.radio("Navigation", ["Scan", "History"])
+url = st.text_input("Enter Website URL")
 
-# ===== VALID DOMAIN =====
-def valid_domain(domain):
-    return re.match(r"^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$", domain)
-
-# ===== PORT SCAN =====
-def check_ports(domain):
-    ports = [21,22,80,443,8080]
-    open_ports = []
-    for p in ports:
-        s = socket.socket()
-        s.settimeout(0.5)
-        try:
-            s.connect((domain,p))
-            open_ports.append(p)
-        except:
-            pass
-        s.close()
-    return open_ports
-
-# ===== SCAN =====
-def scan(domain):
-    ip = socket.gethostbyname(domain)
-
-    api = requests.get(f"http://ip-api.com/json/{ip}").json()
-    res = requests.get(f"http://{domain}", timeout=5)
-
-    soup = BeautifulSoup(res.text,"html.parser")
-    title = soup.title.string if soup.title else "No Title"
-
-    headers = dict(res.headers)
-
-    ssl_status = "Secure"
-    try:
-        ctx = ssl.create_default_context()
-        with ctx.wrap_socket(socket.socket(), server_hostname=domain) as s:
-            s.connect((domain,443))
-    except:
-        ssl_status = "Not Secure"
-
-    ports = check_ports(domain)
-
-    return {
-        "ip": ip,
-        "city": api.get("city"),
-        "country": api.get("country"),
-        "status": res.status_code,
-        "ssl": ssl_status,
-        "title": title,
-        "headers": headers,
-        "ports": ports
+# ---------------- FUNCTIONS ----------------
+def analyze_headers(headers):
+    security_headers = {
+        "Content-Security-Policy": "Prevents XSS attacks",
+        "X-Frame-Options": "Prevents clickjacking",
+        "Strict-Transport-Security": "Forces HTTPS",
+        "X-Content-Type-Options": "Prevents MIME sniffing",
+        "Referrer-Policy": "Controls referrer data"
     }
 
-# ===== RISK =====
-def risk(data):
-    score = 0
-    if data["ssl"] == "Not Secure":
-        score += 40
-    if data["status"] != 200:
-        score += 30
-    if len(data["ports"]) > 2:
-        score += 20
-    if "login" in data["title"].lower():
-        score += 10
-    return min(score,100)
+    result = []
 
-# ===== SCAN PAGE =====
-if menu == "Scan":
-
-    domain = st.text_input("Enter Domain")
-
-    if st.button("Scan Now"):
-
-        if not valid_domain(domain):
-            st.error("Invalid domain")
+    for key, desc in security_headers.items():
+        if key in headers:
+            result.append((key, "✅ Present", desc))
         else:
+            result.append((key, "❌ Missing", desc))
 
-            term = st.empty()
-            for t in ["Initializing...", "Scanning Ports...", "Fetching Data..."]:
-                term.text(t)
-                time.sleep(0.5)
+    return result
 
-            data = scan(domain)
 
-            c.execute("INSERT INTO scans VALUES (?,?,datetime('now'))",(domain,str(data)))
-            conn.commit()
+def generate_pdf(url, headers_analysis):
+    pdf = FPDF()
+    pdf.add_page()
+
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt="Cyber Report", ln=True)
+
+    pdf.cell(200, 10, txt=f"URL: {url}", ln=True)
+
+    for h in headers_analysis:
+        pdf.cell(200, 10, txt=f"{h[0]} - {h[1]}", ln=True)
+
+    pdf.output("report.pdf")
+
+
+# ---------------- SCAN BUTTON ----------------
+if st.button("🚀 Scan Now"):
+    try:
+        response = requests.get(url)
+        headers = response.headers
+
+        st.success("Scan Completed ✅")
+
+        # -------- HEADERS UI --------
+        st.subheader("🛡️ Security Headers")
+
+        analysis = analyze_headers(headers)
+
+        for h in analysis:
+            color = "#00ffcc" if "Present" in h[1] else "#ff4b4b"
 
             st.markdown(f"""
-            <div class="row">
-            <div class="card"><h3>IP</h3>{data['ip']}</div>
-            <div class="card"><h3>Status</h3>{data['status']}</div>
-            <div class="card"><h3>SSL</h3>{data['ssl']}</div>
+            <div class="card" style="border:1px solid {color}; box-shadow:0 0 15px {color};">
+                <h4 style="color:{color}">{h[0]}</h4>
+                <p>{h[1]}</p>
+                <small>{h[2]}</small>
             </div>
-
-            <div class="row">
-            <div class="card"><h3>Country</h3>{data['country']}</div>
-            <div class="card"><h3>City</h3>{data['city']}</div>
-            <div class="card"><h3>Ports</h3>{data['ports']}</div>
-            </div>
-
-            <div class="card"><h3>Title</h3>{data['title']}</div>
             """, unsafe_allow_html=True)
 
-            # Risk
-            score = risk(data)
-            st.subheader("⚠️ Risk Score")
-            st.progress(score)
+        # -------- PAGE DATA --------
+        soup = BeautifulSoup(response.text, "html.parser")
+        title = soup.title.string if soup.title else "No title"
 
-            # Chart
-            fig, ax = plt.subplots()
-            fig.patch.set_facecolor('black')
-            ax.set_facecolor('black')
-            ax.bar(["Risk"], [score])
-            ax.tick_params(colors='#00ffcc')
-            st.pyplot(fig)
+        st.subheader("🌐 Website Info")
 
-            # Headers
-            st.subheader("📡 Headers")
-            st.json(data["headers"])
+        st.markdown(f"""
+        <div class="card">
+            <h3>Title: {title}</h3>
+            <p>Status Code: {response.status_code}</p>
+        </div>
+        """, unsafe_allow_html=True)
 
-# ===== HISTORY =====
-elif menu == "History":
+        # -------- PDF --------
+        if st.button("📄 Download Report"):
+            generate_pdf(url, analysis)
+            with open("report.pdf", "rb") as f:
+                st.download_button("Download PDF", f, file_name="report.pdf")
 
-    st.subheader("Scan History")
-
-    c.execute("SELECT * FROM scans ORDER BY time DESC")
-    rows = c.fetchall()
-
-    for r in rows:
-        st.write(r)
-
-    if st.button("Clear History"):
-        c.execute("DELETE FROM scans")
-        conn.commit()
-        st.success("Cleared")
+    except:
+        st.error("Invalid URL or Site Down ❌")
