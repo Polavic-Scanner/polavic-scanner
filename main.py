@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup
 from fpdf import FPDF
 from openai import OpenAI
 
-st.set_page_config(layout="wide", page_title="CYBER AI PRO")
+st.set_page_config(layout="wide", page_title="POLAVIC CYBER AI PRO")
 
 # ===== DATABASE =====
 conn = sqlite3.connect("data.db", check_same_thread=False)
@@ -60,7 +60,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🛡️ CYBER AI PRO DASHBOARD")
+st.title("🛡️ POLAVIC CYBER AI PRO DASHBOARD")
 
 menu = st.sidebar.radio("Navigation", ["Scan", "History"])
 
@@ -166,7 +166,7 @@ def generate_pdf(domain, data, ai_text):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
-    pdf.cell(200,10,txt="CYBER SCAN REPORT",ln=True,align='C')
+    pdf.cell(200,10,txt="POLAVIC CYBER SCAN REPORT",ln=True,align='C')
     pdf.ln(5)
     pdf.cell(200,10,txt=f"Domain: {domain}",ln=True)
     pdf.cell(200,10,txt=f"IP: {data['ip']}",ln=True)
@@ -251,7 +251,7 @@ if menu == "Scan":
         ai_text = st.session_state.ai_text
         generate_pdf(domain, data, ai_text)
         with open("report.pdf", "rb") as f:
-            st.download_button("📄 Download PDF Report", f, file_name="report.pdf")
+            st.download_button("📄 Download POLAVIC Report", f, file_name="report.pdf")
 
 # ===== HISTORY PAGE =====
 elif menu == "History":
