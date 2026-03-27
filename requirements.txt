@@ -1,4 +1,6 @@
-streamlit 
+plotly
+streamlit
 requests
 beautifulsoup4
 fpdf
+openai
