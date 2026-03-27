@@ -15,7 +15,11 @@ st.set_page_config(layout="wide", page_title="POLAVIC CYBER AI PRO")
 # ===== DATABASE =====
 conn = sqlite3.connect("data.db", check_same_thread=False)
 c = conn.cursor()
-c.execute("CREATE TABLE IF NOT EXISTS scans(domain TEXT, result TEXT, time TEXT)")
+c.execute("""
+CREATE TABLE IF NOT EXISTS scans(
+    domain TEXT, result TEXT, time TEXT
+)
+""")
 conn.commit()
 
 # ===== UI STYLE =====
@@ -32,7 +36,6 @@ st.markdown("""
     color:#00ffcc;
     font-family:monospace;
 }
-
 .card {
     background:rgba(0,255,204,0.08);
     border:1px solid #00ffcc;
@@ -66,55 +69,72 @@ menu = st.sidebar.radio("Navigation", ["Scan", "History"])
 
 # ===== VALID DOMAIN =====
 def valid_domain(domain):
-    return re.match(r"^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$", domain)
+    return re.match(r"^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$", domain) or re.match(r"^\d{1,3}(\.\d{1,3}){3}$", domain)
 
 # ===== PORT SCAN =====
-def check_ports(domain):
-    ports = [21,22,80,443,8080]
+def check_ports(domain, ports=None, timeout=1):
+    if ports is None:
+        ports = [21,22,80,443,8080]
     open_ports = []
     for p in ports:
-        s = socket.socket()
-        s.settimeout(0.5)
         try:
+            s = socket.socket()
+            s.settimeout(timeout)
             s.connect((domain,p))
             open_ports.append(p)
-        except:
-            pass
-        s.close()
+        except (socket.timeout, socket.error):
+            continue
+        finally:
+            s.close()
     return open_ports
 
 # ===== SCAN FUNCTION =====
 def scan(domain):
+    # Resolve IP
     try:
         ip = socket.gethostbyname(domain)
-    except:
+    except socket.gaierror:
         ip = "Unknown"
 
+    # Geo info
     try:
         api = requests.get(f"http://ip-api.com/json/{ip}", timeout=3).json()
-    except:
+    except requests.RequestException:
         api = {}
 
+    # HTTP(S) Request
+    status_code = "No Response"
+    title = "No Title"
+    headers = {}
+    url = f"https://{domain}"
     try:
-        res = requests.get(f"http://{domain}", timeout=5)
+        res = requests.get(url, timeout=5)
+    except requests.RequestException:
+        # fallback HTTP
+        url = f"http://{domain}"
+        try:
+            res = requests.get(url, timeout=5)
+        except requests.RequestException:
+            res = None
+
+    if res:
         status_code = res.status_code
-        soup = BeautifulSoup(res.text,"html.parser")
+        soup = BeautifulSoup(res.text, "html.parser")
         title = soup.title.string if soup.title else "No Title"
         headers = dict(res.headers)
-    except:
-        status_code = "No Response"
-        title = "No Title"
-        headers = {}
 
-    ssl_status = "Secure"
+    # SSL Check
+    ssl_status = "Not Secure"
     try:
         ctx = ssl.create_default_context()
         with ctx.wrap_socket(socket.socket(), server_hostname=domain) as s:
             s.settimeout(3)
-            s.connect((domain,443))
-    except:
+            s.connect((domain, 443))
+        ssl_status = "Secure"
+    except (ssl.SSLError, socket.error):
         ssl_status = "Not Secure"
 
+    # Ports
     ports = check_ports(domain)
 
     return {
@@ -139,7 +159,7 @@ def risk(data):
         score += 20
     if "login" in data["title"].lower():
         score += 10
-    return min(score,100)
+    return min(score, 100)
 
 # ===== AI ANALYSIS =====
 def ai_analysis(data):
@@ -148,7 +168,7 @@ def ai_analysis(data):
         content = f"""
         Analyze this website scan result for cybersecurity issues:
         {data}
-        Provide vulnerabilities, suggestions and risk assessment in short.
+        Provide vulnerabilities, suggestions, and risk assessment concisely.
         """
         res = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -158,26 +178,23 @@ def ai_analysis(data):
             ]
         )
         return res.choices[0].message.content
-    except:
-        return "AI analysis unavailable"
+    except Exception as e:
+        return f"AI analysis unavailable: {str(e)}"
 
 # ===== PDF REPORT =====
 def generate_pdf(domain, data, ai_text):
     pdf = FPDF()
     pdf.add_page()
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, "POLAVIC CYBER SCAN REPORT", ln=True, align='C')
     pdf.set_font("Arial", size=12)
-    pdf.cell(200,10,txt="POLAVIC CYBER SCAN REPORT",ln=True,align='C')
     pdf.ln(5)
-    pdf.cell(200,10,txt=f"Domain: {domain}",ln=True)
-    pdf.cell(200,10,txt=f"IP: {data['ip']}",ln=True)
-    pdf.cell(200,10,txt=f"City: {data['city']}",ln=True)
-    pdf.cell(200,10,txt=f"Country: {data['country']}",ln=True)
-    pdf.cell(200,10,txt=f"Status: {data['status']}",ln=True)
-    pdf.cell(200,10,txt=f"SSL: {data['ssl']}",ln=True)
-    pdf.cell(200,10,txt=f"Title: {data['title']}",ln=True)
-    pdf.cell(200,10,txt=f"Open Ports: {data['ports']}",ln=True)
+    info_items = ["Domain", "IP", "City", "Country", "Status", "SSL", "Title", "Open Ports"]
+    for key in info_items:
+        val = data.get(key.lower()) if key.lower() != "open ports" else data["ports"]
+        pdf.multi_cell(0, 8, f"{key}: {val}")
     pdf.ln(5)
-    pdf.multi_cell(0,8,txt="AI Analysis:\n"+ai_text)
+    pdf.multi_cell(0, 8, "AI Analysis:\n" + ai_text)
     pdf.output("report.pdf")
 
 # ===== SESSION STATE =====
@@ -188,10 +205,10 @@ if "ai_text" not in st.session_state:
 
 # ===== SCAN PAGE =====
 if menu == "Scan":
-    domain = st.text_input("Enter Domain (without http://)")
+    domain = st.text_input("Enter Domain (without http:// or https://)")
     if st.button("Scan Now"):
         if not valid_domain(domain):
-            st.error("Invalid domain")
+            st.error("Invalid domain or IP")
         else:
             term = st.empty()
             for t in ["Initializing...", "Scanning Ports...", "Fetching Data...", "AI Analysis..."]:
@@ -202,10 +219,10 @@ if menu == "Scan":
             st.session_state.scan_result = (domain, data)
 
             # Save to DB
-            c.execute("INSERT INTO scans VALUES (?,?,datetime('now'))",(domain,str(data)))
+            c.execute("INSERT INTO scans VALUES (?,?,datetime('now'))", (domain, str(data)))
             conn.commit()
 
-            # ===== UI CARDS =====
+            # UI CARDS
             st.markdown(f"""
             <div class="row">
             <div class="card"><h3>IP</h3>{data['ip']}</div>
@@ -222,7 +239,7 @@ if menu == "Scan":
             <div class="card"><h3>Title</h3>{data['title']}</div>
             """, unsafe_allow_html=True)
 
-            # Risk
+            # Risk Score
             score = risk(data)
             st.subheader("⚠️ Risk Score")
             st.progress(score)
@@ -239,13 +256,13 @@ if menu == "Scan":
             st.subheader("📡 Headers")
             st.json(data["headers"])
 
-            # AI ANALYSIS
+            # AI Analysis
             st.subheader("🤖 AI Analysis")
             ai_text = ai_analysis(data)
             st.session_state.ai_text = ai_text
             st.text(ai_text)
 
-    # ===== PDF DOWNLOAD =====
+    # PDF Download
     if st.session_state.scan_result and st.session_state.ai_text:
         domain, data = st.session_state.scan_result
         ai_text = st.session_state.ai_text
