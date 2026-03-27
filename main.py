@@ -184,7 +184,7 @@ def generate_pdf(domain, data, ai_lines):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, "POLAVIC CYBER AI NEON REPORT", ln=True, align='C')
+    pdf.cell(0, 10, "POLAVIC CYBER AI REPORT", ln=True, align='C')
     pdf.set_font("Arial", size=12)
     pdf.ln(10)
     pdf.cell(0, 10, f"Domain: {domain}", ln=True)
@@ -206,7 +206,7 @@ if "ai_lines" not in st.session_state: st.session_state.ai_lines=None
 # ===== Scan Page =====
 if menu=="Scan":
     domain_input = st.text_input("Enter Domain (e.g. google.com)")
-    if st.button("INITIATE NEON SCAN"):
+    if st.button("SCAN"):
         if not valid_domain(domain_input):
             st.error("❌ Invalid domain or IP format")
         else:
