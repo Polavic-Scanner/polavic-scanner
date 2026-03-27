@@ -19,7 +19,7 @@ except:
     PLOTLY_AVAILABLE = False
 
 # ===== Streamlit Page Config =====
-st.set_page_config(layout="wide", page_title="POLAVIC CYBER AI NEON")
+st.set_page_config(layout="wide", page_title="POLAVIC CYBER AI")
 
 # ===== Database Setup (Error Fixed for Cloud) =====
 def get_db_connection():
@@ -62,7 +62,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🛡️ POLAVIC CYBER AI NEON")
+st.title("🛡️ POLAVIC CYBER AI")
 
 # ===== Sidebar =====
 menu = st.sidebar.radio("Navigation", ["Scan", "History"])
