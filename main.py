@@ -177,7 +177,7 @@ def ai_analysis(data):
             else: severity_lines.append((line, None))
         return severity_lines
     except Exception as e:
-        return [("AI Analysis Error: Check your API Key in Secrets.", "red")]
+        return [("AI Audit is currently in maintenenance mode.","orange")]
 
 # ===== PDF Generator =====
 def generate_pdf(domain, data, ai_lines):
