@@ -4,38 +4,25 @@ import requests
 import ssl
 import re
 import sqlite3
-import matplotlib.pyplot as plt
+import time
 from bs4 import BeautifulSoup
 from fpdf import FPDF
 from openai import OpenAI
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
+import plotly.graph_objects as go
 
-# ===== Streamlit Page Config =====
-st.set_page_config(layout="wide", page_title="POLAVIC CYBER AI PRO")
+# ===== Page Config =====
+st.set_page_config(layout="wide", page_title="POLAVIC CYBER AI ELITE")
 
-# ===== Database Setup =====
+# ===== Database =====
 conn = sqlite3.connect("data.db", check_same_thread=False)
 c = conn.cursor()
 c.execute("""
 CREATE TABLE IF NOT EXISTS scans(
-    domain TEXT, result TEXT, time TEXT
+    domain TEXT, result TEXT, risk INTEGER, time TEXT
 )
 """)
 conn.commit()
-
-# ===== UI STYLE =====
-st.markdown("""
-<style>
-.stApp { font-family: monospace; }
-.card { background: rgba(0,255,204,0.08); border:1px solid #00ffcc; border-radius:15px; padding:20px; margin:10px; text-align:center; backdrop-filter:blur(10px); transition:0.3s;}
-.card:hover { transform:scale(1.07); box-shadow:0 0 30px #00ffcc;}
-.row { display:flex; justify-content:space-around; flex-wrap:wrap;}
-.stButton>button { background-color:#00ffcc; color:black; font-weight:bold;}
-</style>
-""", unsafe_allow_html=True)
-
-st.title("🛡️ POLAVIC CYBER AI PRO")
 
 # ===== Sidebar Navigation =====
 menu = st.sidebar.radio("Navigation", ["Scan", "History"])
@@ -63,24 +50,22 @@ def check_ports(domain, ports=[21,22,80,443,8080], timeout=1):
         future_to_port = {executor.submit(check_port, domain, p, timeout): p for p in ports}
         for future in as_completed(future_to_port):
             result = future.result()
-            if result: open_ports.append(result)
+            if result:
+                open_ports.append(result)
     return open_ports
 
 # ===== Scan Function =====
 def scan(domain):
-    # Resolve IP
     try:
         ip = socket.gethostbyname(domain)
     except socket.gaierror:
         ip = "Unknown"
 
-    # Geo Info
     try:
         api = requests.get(f"http://ip-api.com/json/{ip}", timeout=3).json()
     except:
         api = {}
 
-    # HTTP(S) Request
     status_code = "No Response"
     title = "No Title"
     headers = {}
@@ -96,7 +81,6 @@ def scan(domain):
         except:
             continue
 
-    # SSL Check
     ssl_status = "Not Secure"
     try:
         ctx = ssl.create_default_context()
@@ -107,7 +91,6 @@ def scan(domain):
     except:
         ssl_status = "Not Secure"
 
-    # Ports
     ports = check_ports(domain)
 
     return {
@@ -130,11 +113,11 @@ def risk(data):
     if "login" in data["title"].lower(): score+=10
     return min(score,100)
 
-# ===== AI Analysis =====
+# ===== AI Analysis with Severity =====
 def ai_analysis(data):
     try:
         client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-        content = f"Analyze this website scan result for cybersecurity issues: {data}. Provide vulnerabilities, suggestions and risk assessment."
+        content = f"Analyze this website scan result: {data}. Provide vulnerabilities, categorize severity as Critical, Medium, Low, and suggestions."
         res = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -142,28 +125,38 @@ def ai_analysis(data):
                 {"role":"user","content":content}
             ]
         )
-        return res.choices[0].message.content
+        analysis = res.choices[0].message.content
+        # Simple parsing to highlight severity
+        severity_lines = []
+        for line in analysis.split("\n"):
+            if "Critical" in line: severity_lines.append(("🔴 "+line, "red"))
+            elif "Medium" in line: severity_lines.append(("🟠 "+line, "orange"))
+            elif "Low" in line: severity_lines.append(("🟢 "+line, "green"))
+            else: severity_lines.append((line, None))
+        return severity_lines
     except Exception as e:
-        return f"AI analysis unavailable: {str(e)}"
+        return [("AI analysis unavailable: "+str(e), "red")]
 
-# ===== PDF Report =====
-def generate_pdf(domain,data,ai_text):
+# ===== PDF Generation =====
+def generate_pdf(domain,data,ai_lines):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial","B",14)
-    pdf.cell(0,10,"POLAVIC CYBER SCAN REPORT",ln=True,align='C')
+    pdf.cell(0,10,"POLAVIC CYBER ELITE REPORT",ln=True,align='C')
     pdf.set_font("Arial",size=12)
     pdf.ln(5)
     for key in ["Domain","IP","City","Country","Status","SSL","Title","Open Ports"]:
         val = data.get(key.lower()) if key.lower()!="open ports" else data["ports"]
         pdf.multi_cell(0,8,f"{key}: {val}")
     pdf.ln(5)
-    pdf.multi_cell(0,8,"AI Analysis:\n"+ai_text)
+    pdf.multi_cell(0,8,"AI Analysis:")
+    for text,color in ai_lines:
+        pdf.multi_cell(0,8,text)
     pdf.output("report.pdf")
 
 # ===== Session State =====
 if "scan_result" not in st.session_state: st.session_state.scan_result=None
-if "ai_text" not in st.session_state: st.session_state.ai_text=None
+if "ai_lines" not in st.session_state: st.session_state.ai_lines=None
 
 # ===== Scan Page =====
 if menu=="Scan":
@@ -172,18 +165,21 @@ if menu=="Scan":
         if not valid_domain(domain):
             st.error("Invalid domain or IP")
         else:
-            # Real-time scanning messages
-            status_text = st.empty()
-            steps = ["Initializing...", "Scanning Ports...", "Fetching Data...", "AI Analysis..."]
-            for s in steps:
-                status_text.text(s)
+            progress_text = st.empty()
+            progress_bar = st.progress(0)
+            steps = ["Initializing","Port Scanning","Fetching Data","AI Analysis"]
+            for i, step in enumerate(steps):
+                progress_text.text(f"{step}...")
                 time.sleep(0.5)
+                progress_bar.progress(int((i+1)/len(steps)*100))
 
             data = scan(domain)
             st.session_state.scan_result = (domain,data)
 
+            score = risk(data)
+
             # Save to DB
-            c.execute("INSERT INTO scans VALUES (?,?,datetime('now'))",(domain,str(data)))
+            c.execute("INSERT INTO scans VALUES (?,?,?,datetime('now'))",(domain,str(data),score))
             conn.commit()
 
             # UI Cards
@@ -201,18 +197,10 @@ if menu=="Scan":
             <div class="card"><h3>Title</h3>{data['title']}</div>
             """,unsafe_allow_html=True)
 
-            # Risk Score
-            score = risk(data)
-            st.subheader("⚠️ Risk Score")
-            st.progress(score)
-
-            # Chart
-            fig,ax=plt.subplots()
-            fig.patch.set_facecolor('#121212' if theme=="Dark" else 'white')
-            ax.set_facecolor('#121212' if theme=="Dark" else 'white')
-            ax.bar(["Risk"],[score],color='#00ffcc')
-            ax.tick_params(colors='#00ffcc' if theme=="Dark" else 'black')
-            st.pyplot(fig)
+            # Interactive Risk Chart
+            fig = go.Figure([go.Bar(x=["Risk Score"], y=[score], marker_color='#FF5733' if score>60 else '#FFC300' if score>30 else '#28B463')])
+            fig.update_layout(plot_bgcolor='#121212' if theme=="Dark" else 'white', paper_bgcolor='#121212' if theme=="Dark" else 'white', font_color='#00ffcc' if theme=="Dark" else 'black')
+            st.plotly_chart(fig,use_container_width=True)
 
             # Headers
             st.subheader("📡 Headers")
@@ -220,24 +208,26 @@ if menu=="Scan":
 
             # AI Analysis
             st.subheader("🤖 AI Analysis")
-            ai_text=ai_analysis(data)
-            st.session_state.ai_text=ai_text
-            st.text(ai_text)
+            ai_lines = ai_analysis(data)
+            st.session_state.ai_lines = ai_lines
+            for text,color in ai_lines:
+                st.markdown(f"<span style='color:{color}'>{text}</span>" if color else text,unsafe_allow_html=True)
 
     # PDF Download
-    if st.session_state.scan_result and st.session_state.ai_text:
-        domain,data=st.session_state.scan_result
-        ai_text=st.session_state.ai_text
-        generate_pdf(domain,data,ai_text)
+    if st.session_state.scan_result and st.session_state.ai_lines:
+        domain,data = st.session_state.scan_result
+        ai_lines = st.session_state.ai_lines
+        generate_pdf(domain,data,ai_lines)
         with open("report.pdf","rb") as f:
-            st.download_button("📄 Download POLAVIC Report",f,file_name="report.pdf")
+            st.download_button("📄 Download POLAVIC Elite Report",f,file_name="report.pdf")
 
 # ===== History Page =====
 elif menu=="History":
-    st.subheader("Scan History")
-    c.execute("SELECT * FROM scans ORDER BY time DESC")
-    rows=c.fetchall()
-    for r in rows: st.write(r)
+    st.subheader("Scan History Dashboard")
+    c.execute("SELECT domain,risk,time FROM scans ORDER BY time DESC")
+    rows = c.fetchall()
+    for r in rows:
+        st.write(f"Domain: {r[0]}, Risk: {r[1]}, Time: {r[2]}")
     if st.button("Clear History"):
         c.execute("DELETE FROM scans")
         conn.commit()
